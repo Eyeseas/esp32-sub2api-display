@@ -40,8 +40,8 @@ sub2api 管理 API ──HTTPS──▶ bridge（采集、缓存、设备 Token�
 只要有 Python 3.9 以上：
 
 ```sh
-git clone https://github.com/Eyeseas/sub2api-display.git
-cd sub2api-display
+git clone https://github.com/Eyeseas/esp32-sub2api-display.git
+cd esp32-sub2api-display
 python3 -m bridge demo --port 8788
 ```
 

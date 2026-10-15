@@ -43,8 +43,8 @@ Ubuntu 24.04 自带 Python 3.12；更早的版本需要从 deadsnakes PPA 等来
 ### 2. 获取代码并安装工具链
 
 ```sh
-git clone https://github.com/Eyeseas/sub2api-display.git
-cd sub2api-display
+git clone https://github.com/Eyeseas/esp32-sub2api-display.git
+cd esp32-sub2api-display
 scripts/setup.sh
 ```
 
