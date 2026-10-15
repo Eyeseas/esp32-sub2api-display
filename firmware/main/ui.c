@@ -1271,7 +1271,8 @@ static void paint_close(void)
     render(); lv_obj_invalidate(app_screen);
 }
 
-esp_err_t ui_display_test(const char *pattern)
+// `step`, `steps` and `level` apply to the flicker pattern only.
+esp_err_t ui_display_test(const char *pattern, int step, int steps, int level)
 {
     const struct { const char *name; uint32_t color; } patterns[] = {
         {"black", 0x000000}, {"gray", 0x808080}, {"white", 0xffffff},
@@ -1281,8 +1282,9 @@ esp_err_t ui_display_test(const char *pattern)
     bool off = !strcmp(pattern, "off");
     bool ramp = !strcmp(pattern, "ramp");
     bool touch = !strcmp(pattern, "touch");
+    bool flicker = !strcmp(pattern, "flicker");
     uint32_t color = 0;
-    bool valid = restore || off || ramp || touch;
+    bool valid = restore || off || ramp || touch || flicker;
     for (size_t i = 0; i < sizeof(patterns) / sizeof(patterns[0]); i++) {
         if (!strcmp(pattern, patterns[i].name)) {
             color = patterns[i].color;
@@ -1290,7 +1292,7 @@ esp_err_t ui_display_test(const char *pattern)
             break;
         }
     }
-    if (!valid) return ESP_ERR_INVALID_ARG;
+    if (!valid || (flicker && (steps < 0 || steps > 32 || step >= steps || level < 1 || level > 255))) return ESP_ERR_INVALID_ARG;
     lvgl_port_lock(0);
     esp_err_t result = board_set_backlight(false);
     if (result == ESP_OK && !off) {
@@ -1314,6 +1316,7 @@ esp_err_t ui_display_test(const char *pattern)
         lv_refr_now(ui_display);
         // Bypass LVGL's drawing buffers as well: every LCD pixel is overwritten.
         if (ramp) result = board_draw_ramp();
+        else if (flicker) result = board_draw_flicker(step, steps, (uint8_t)level);
         else if (!restore && !touch) result = board_fill_color(color);
         if (result == ESP_OK) result = board_set_backlight(true);
     }

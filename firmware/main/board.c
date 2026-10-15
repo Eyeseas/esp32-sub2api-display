@@ -338,6 +338,39 @@ esp_err_t board_draw_ramp(void)
     return result;
 }
 
+// VCOM flicker test, written straight to the panel. Lit pixels at `level` alternate with dark ones so that, under
+// each inversion scheme the ST7789 may use, every lit subpixel has the same polarity in a frame: a VCOM off-centre
+// then makes that area flicker at half the frame rate. Quadrants: pixel checkerboard of gray and black (dot
+// inversion per pixel); magenta/green checkerboard (dot inversion per subpixel, the C6 default); magenta/green
+// rows and columns (column inversion in either orientation). The top strip marks `step` of `steps` in a sweep.
+esp_err_t board_draw_flicker(int step, int steps, uint8_t level)
+{
+    uint16_t *buffer = heap_caps_malloc(320 * 40 * 2, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    ESP_RETURN_ON_FALSE(buffer, ESP_ERR_NO_MEM, TAG, "test buffer");
+    const uint32_t gray = level * 0x010101u, magenta = level * 0x010001u, green = level * 0x000100u;
+    esp_err_t result = ESP_OK;
+    for (int stripe = 0; stripe < 6 && result == ESP_OK; stripe++) {
+        for (int row = 0; row < 40; row++) {
+            int y = stripe * 40 + row;
+            for (int x = 0; x < 320; x++) {
+                uint32_t color;
+                if (y < 24) {
+                    int cell = steps > 0 ? x * steps / 320 : -1;
+                    bool gap = steps > 0 && (x * steps) % 320 < 2 * steps, edge = y < 4 || y >= 20;
+                    color = cell < 0 || gap || edge ? 0x000000 : cell == step ? 0xffffff : 0x242c28;
+                } else if (y < 132) color = x < 160 ? ((x + y) & 1 ? 0x000000 : gray) : ((x + y) & 1 ? green : magenta);
+                else color = x < 160 ? (y & 1 ? green : magenta) : (x & 1 ? green : magenta);
+                buffer[row * 320 + x] = rgb565_be(color);
+            }
+        }
+        result = esp_lcd_panel_draw_bitmap(panel, 0, stripe * 40, 320, stripe * 40 + 40, buffer);
+        esp_err_t drained = esp_lcd_panel_io_tx_param(lcd_io, -1, NULL, 0);
+        if (result == ESP_OK) result = drained;
+    }
+    free(buffer);
+    return result;
+}
+
 // Writes one panel tuning register; callers hold the LVGL port lock so no frame is in flight.
 esp_err_t board_lcd_command(uint8_t command, const uint8_t *data, size_t length)
 {

@@ -96,8 +96,14 @@ $PY scripts/display-test.py --port /dev/cu.usbmodemXXXX --pattern ramp
 $PY scripts/display-test.py --port /dev/cu.usbmodemXXXX --pattern ramp --register 0xBB 0x15
 ```
 
-- `--pattern`：`black`、`gray`、`white`、`red`、`green`、`blue`、`ramp`、`off`、`ui`。
+- `--pattern`：`black`、`gray`、`white`、`red`、`green`、`blue`、`ramp`、`flicker`、`off`、`ui`、`touch`。
 - `--register CMD [DATA...]`：可重复，实时写面板寄存器，只接受 Gamma、电压和反色类寄存器（20、21、26、B7、BB、C0、C2–C6、D0、E0、E1）。写入的值复位后失效；确认后需要写进 `board_init()`。
+- `flicker`：VCOM 闪烁测试图。亮、暗像素交错排列，覆盖 ST7789 可能使用的几种反转方式（像素点反转、子像素点反转、行/列反转各占一块）。VCOM 偏离中心时，对应区域会以半帧率闪烁。`--level` 设置亮像素灰度，默认 0x80。
+- `--vcom-sweep BYTE...`：先把 C6 帧率降到 `--frame-rate`（默认 0x1F，约 39 Hz，闪烁更容易看出），再依次写入各 BB 值并显示 `flicker`，顶部格子标出当前档位（最多 32 档）。每档停留 `--hold` 秒（默认 6），共扫 `--rounds` 轮（默认 2）。闪烁最弱的一档就是 VCOM 的较优值。
+
+```sh
+$PY scripts/display-test.py --port /dev/cu.usbmodemXXXX --vcom-sweep 0x13 0x15 0x17 0x19 0x1B 0x1D
+```
 - 图案显示后保持不变，直到下一次打开串口。
 
 **注意：在 macOS 上打开 ESP32-S3 的 USB 串口会复位开发板。** 包括 `device-check.py`、只读日志，以及每一次 `display-test.py` 调用。分多次调用时，前一次写入的寄存器和测试图都会丢失，所以调参必须把图案和所有寄存器放在同一条命令里。

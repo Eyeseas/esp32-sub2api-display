@@ -87,7 +87,10 @@ static void console_task(void *unused)
         } else if (cJSON_IsString(command) && !strcmp(command->valuestring, "display_test")) {
             cJSON *pattern = cJSON_GetObjectItemCaseSensitive(root, "pattern");
             if (cJSON_IsString(pattern)) {
-                esp_err_t result = ui_display_test(pattern->valuestring);
+                cJSON *step = cJSON_GetObjectItemCaseSensitive(root, "step"), *steps = cJSON_GetObjectItemCaseSensitive(root, "steps");
+                cJSON *level = cJSON_GetObjectItemCaseSensitive(root, "level");
+                esp_err_t result = ui_display_test(pattern->valuestring, cJSON_IsNumber(step) ? step->valueint : -1,
+                                                   cJSON_IsNumber(steps) ? steps->valueint : 0, cJSON_IsNumber(level) ? level->valueint : 0x80);
                 if (result == ESP_OK) printf("DISPLAY_TEST_OK %s\n", pattern->valuestring);
                 else printf("DISPLAY_TEST_FAILED %s\n", esp_err_to_name(result));
             } else printf("DISPLAY_TEST_INVALID\n");

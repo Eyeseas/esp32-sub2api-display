@@ -235,7 +235,7 @@ network: snapshot accepted: page=1 accounts=3 partial=0
 | 测试图 | `{"command":"display_test","pattern":"ramp"}`；`"touch"` 打开触摸校准 | `DISPLAY_TEST_OK ramp` |
 | 写面板寄存器 | `{"command":"lcd","cmd":187,"data":[25]}`（只接受白名单寄存器） | `LCD_OK 0xbb` |
 
-测试图、背光和寄存器调试建议使用 `scripts/display-test.py`（选项为 `--pattern`、`--backlight`、`--register`）。**在 macOS 上打开 USB 串口会复位开发板**，所以测试图和寄存器写入必须放在同一条命令里完成。详见[屏幕界面与面板调校](display-ui-and-panel.md#4-诊断工具)。
+测试图、背光和寄存器调试建议使用 `scripts/display-test.py`（选项为 `--pattern`、`--backlight`、`--register`、`--vcom-sweep`）。**在 macOS 上打开 USB 串口会复位开发板**，所以测试图和寄存器写入必须放在同一条命令里完成。详见[屏幕界面与面板调校](display-ui-and-panel.md#4-诊断工具)。
 
 ## 网络和安全边界
 
