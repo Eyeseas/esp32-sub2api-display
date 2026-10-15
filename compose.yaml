@@ -1,0 +1,9 @@
+services:
+  display:
+    build: .
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./bridge/config.local.json:/config/config.local.json:ro
+      - ./bridge/secrets:/config/secrets:ro
+    restart: unless-stopped

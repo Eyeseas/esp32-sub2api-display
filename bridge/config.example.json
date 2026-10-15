@@ -1,0 +1,26 @@
+{
+  "upstream_url": "https://sub2api.example.com",
+  "admin_api_key_file": "secrets/admin-api-key",
+  "sub2api_timezone": "Asia/Shanghai",
+  "selection": "ids",
+  "accounts": [],
+  "use_monitors": false,
+  "state_interval": 30,
+  "today_interval": 60,
+  "models_interval": 60,
+  "window_interval": 60,
+  "quota_interval": 300,
+  "quota_stale_seconds": 900,
+  "request_timeout": 15,
+  "listen_host": "127.0.0.1",
+  "listen_port": 8787,
+  "tls_cert_file": "",
+  "tls_key_file": "",
+  "devices": [
+    {
+      "name": "重点账号",
+      "token_sha256": "",
+      "account_ids": null
+    }
+  ]
+}

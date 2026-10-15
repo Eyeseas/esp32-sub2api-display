@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sub2API 屏幕 UI v2 · 方案选择</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#e9ebe8;color:#1d2320;font:14px/1.55 -apple-system,"PingFang SC",system-ui,sans-serif}
+.wrap{max-width:1320px;margin:0 auto;padding:28px 28px 60px}
+h1{font-size:22px;margin:0 0 4px;font-weight:650;letter-spacing:.2px}
+.sub{color:#5d6964;margin:0 0 14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:22px}
+.chip{background:#fff;border:1px solid #d5dad6;border-radius:999px;padding:3px 10px;font-size:12px;color:#3d4843}
+.chip b{font-weight:600;color:#1d2320}
+.designs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.designs button{all:unset;cursor:pointer;background:#fff;border:1.5px solid #d5dad6;border-radius:12px;padding:12px 14px}
+.designs button.on{border-color:#1d2320;box-shadow:0 0 0 3px #1d232014}
+.designs strong{display:block;font-size:15px}
+.designs span{font-size:12.5px;color:#5d6964}
+main{display:grid;grid-template-columns:auto 1fr;gap:28px;align-items:start}
+.device{background:#191c1b;padding:20px 20px 26px;border-radius:20px;box-shadow:0 18px 40px #1d232030,inset 0 0 0 1px #2c312f;display:inline-block}
+.device canvas{display:block;image-rendering:pixelated;cursor:pointer;touch-action:none;border-radius:2px}
+.dlabel{color:#6d7672;font-size:11px;text-align:center;margin-top:10px;letter-spacing:1px}
+.controls{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:14px;font-size:13px}
+.seg{display:inline-flex;background:#fff;border:1px solid #d5dad6;border-radius:8px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;padding:5px 10px;font-size:12.5px;color:#3d4843}
+.seg button.on{background:#1d2320;color:#fff}
+label.ck{display:inline-flex;gap:5px;align-items:center;cursor:pointer}
+.hint{color:#5d6964;font-size:12.5px;margin:10px 0 0;max-width:680px}
+aside{background:#fff;border:1px solid #d5dad6;border-radius:14px;padding:18px 20px;min-width:0}
+aside h2{font-size:17px;margin:0 0 2px}
+aside .tag{color:#5d6964;margin:0 0 12px}
+aside h3{font-size:12px;letter-spacing:1px;color:#7a8580;margin:16px 0 6px;font-weight:600}
+aside ul{margin:0;padding-left:18px}
+aside li{margin:3px 0}
+aside .pc{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+aside .pc div{background:#f4f6f4;border-radius:8px;padding:8px 12px}
+.audit{font:12px ui-monospace,Menlo,monospace;background:#f4f6f4;border-radius:8px;padding:8px 12px;color:#2f3a35}
+.strip{margin-top:30px}
+.strip h3{font-size:13px;color:#5d6964;font-weight:600;margin:0 0 10px}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px}
+.thumb{cursor:pointer}
+.thumb canvas{width:320px;height:240px;display:block;image-rendering:pixelated;border-radius:6px;box-shadow:0 0 0 6px #191c1b,0 8px 20px #1d232026;margin:6px}
+.thumb p{margin:10px 6px 0;font-size:12.5px;color:#3d4843}
+kbd{font:11px ui-monospace,Menlo,monospace;background:#f0f2f0;border:1px solid #d5dad6;border-radius:4px;padding:0 4px}
+</style>
+<body><div class="wrap">
+<h1>Sub2API 状态屏 · UI v2 方案</h1>
+<p class="sub">三个方向，均按实机约束绘制：在 320×240 画布 1:1 绘制后最近邻放大；字体加载固件同源的 Montserrat、Noto Sans CJK 与 LVGL 内置图标。数据取自 bridge 当前真实快照，并附加模拟场景。</p>
+<div class="chips">
+ <span class="chip"><b>320×240</b> ST7789 IPS · RGB565</span>
+ <span class="chip">SPI <b>80 MHz</b> ≈ 15 ms/全帧传输</span>
+ <span class="chip">LVGL 局部缓冲 <b>320×40</b> ×2</span>
+ <span class="chip">FT6336 轮询触摸（无 INT）</span>
+ <span class="chip">现有字库 Montserrat 14/20/28 + 中文 16</span>
+ <span class="chip">已知问题：<b>文字残影</b></span>
+ <span class="chip">真实数据：3 账号 × <b>5h + 7d</b>；现版只显示第一个窗口</span>
+</div>
+<div class="designs" id="designs"></div>
+<main>
+ <section>
+  <div class="device"><canvas id="lcd"></canvas><div class="dlabel">ESP32-S3 · 2.8" 320×240</div></div>
+  <div class="controls">
+   <span>场景</span><span class="seg" id="scen"></span>
+   <span class="seg" id="scale"></span>
+   <label class="ck"><input type="checkbox" id="q565" checked>RGB565 量化</label>
+   <button id="reset" style="all:unset;cursor:pointer;color:#3d4843;text-decoration:underline">回到首页</button>
+  </div>
+  <p class="hint" id="hint"></p>
+ </section>
+ <aside id="notes"></aside>
+</main>
+<section class="strip"><h3 id="stripTitle">该方案全部页面（约实物尺寸，点击载入上方）</h3><div class="thumbs" id="thumbs"></div></section>
+</div>
+<script>
+// ───────────────────────── 时间与数据 ─────────────────────────
+const W = 320, H = 240;
+const SIM0 = Date.parse('2026-10-04T08:00:00Z'), BOOT = Date.now();
+const now = () => SIM0 + 12000 + (Date.now() - BOOT);
+const MIN = 60e3, HR = 3600e3, DAY = 86400e3;
+
+const win = (label, used, resetIn, q = 'observed', age = 30e3) =>
+  ({label, used, reset: resetIn == null ? 0 : SIM0 + resetIn, q, sampled: SIM0 - age});
+const acct = (alias, platform, type, flags, conc, windows, today, balance = '') =>
+  ({alias, platform, type, flags, conc: conc[0], limit: conc[1], windows, today, balance});
+
+function liveAccounts() {
+  return [
+    acct('Claude-20', 'anthropic', 'oauth', ['quota_warning'], [1, 10], [win('5h', 2, 6*HR + 20*MIN), win('7d', 87, 2*DAY + 13*HR)], {req: 210, tok: 31.2e6, cost: 12.10}),
+    acct('Codex-22', 'openai', 'oauth', [], [0, 10], [win('5h', 39, 3*HR + 19*MIN, 'stale', 38*MIN), win('7d', 8, 6*DAY + 5*HR, 'stale', 38*MIN)], {req: 96, tok: 9.8e6, cost: 4.02}),
+    acct('Codex-45', 'openai', 'oauth', [], [1, 10], [win('5h', 15, 2*HR + 4*MIN), win('7d', 4, 6*DAY + 5*HR)], {req: 134, tok: 12.17e6, cost: 5.24}),
+  ];
+}
+const MAIN_MODEL = {anthropic: 'claude-opus-5-5', openai: 'gpt-6.1-sol', gemini: 'gemini-3-pro'};
+function snapshot(accounts, extra) {
+  const sum = k => accounts.reduce((s, a) => s + (a.today?.[k] || 0), 0);
+  const cost = sum('cost');
+  // Demo model split: each account's usage goes to its platform's main model, folded like the bridge does.
+  const byModel = {};
+  accounts.forEach(a => { if (!a.today) return; const m = byModel[MAIN_MODEL[a.platform] || a.platform] ??= {req: 0, tok: 0, cost: 0};
+    m.req += a.today.req; m.tok += a.today.tok; m.cost += a.today.cost; });
+  let models = Object.entries(byModel).map(([name, m]) => ({name, ...m})).sort((a, b) => b.tok - a.tok);
+  if (models.length > 4) models = [...models.slice(0, 3), models.slice(3).reduce((o, m) => ({...o, req: o.req + m.req, tok: o.tok + m.tok, cost: o.cost + m.cost}), {name: null, other: models.length - 3, req: 0, tok: 0, cost: 0})];
+  return Object.assign({accounts, date: '10-04', tz: 'Asia/Shanghai', online: true, stale: false, models,
+    today: {req: sum('req'), tok: sum('tok'), cost, user: cost, std: cost}}, extra);
+}
+const SCENARIOS = {
+  live: {label: '实时快照', make: () => snapshot(liveAccounts(), {summary: {total: 3, normal: 3, alert: 1}})},
+  alert: {label: '告警', make: () => {
+    const a = liveAccounts();
+    a[0].windows = [win('5h', 97, 7*MIN + 40e3), win('7d', 91, 2*DAY + 13*HR)]; a[0].today = {req: 980, tok: 82e6, cost: 34.1};
+    a[1].flags = ['rate_limited']; a[1].windows = [win('5h', 100, 1*HR + 5*MIN), win('7d', 62, 6*DAY + 5*HR)]; a[1].today = {req: 512, tok: 41e6, cost: 18.6};
+    a[2].today = {req: 340, tok: 25.2e6, cost: 11.5};
+    const s = snapshot(a, {summary: {total: 3, normal: 2, alert: 2}});
+    s.today.user = 92.10; s.today.std = 77.00; return s;
+  }},
+  offline: {label: '离线', make: () => snapshot(liveAccounts(), {summary: {total: 3, normal: 3, alert: 1}, online: false, stale: true, offlineSince: SIM0 - 7*MIN})},
+  many: {label: '10 账号', make: () => {
+    const a = liveAccounts();
+    a.push(
+      acct('Claude-31', 'anthropic', 'oauth', [], [3, 10], [win('5h', 64, 1*HR + 12*MIN), win('7d', 41, 4*DAY + 2*HR)], {req: 188, tok: 17.4e6, cost: 8.31}),
+      acct('Codex-50', 'openai', 'oauth', ['quota_warning'], [2, 10], [win('5h', 81, 38*MIN), win('7d', 33, 5*DAY)], {req: 241, tok: 11.9e6, cost: 6.02}),
+      acct('Gemini-07', 'gemini', 'oauth', [], [0, 5], [win('日', 44, 15*HR + 40*MIN, 'estimated')], {req: 75, tok: 3.1e6, cost: 1.44}),
+      acct('API-03', 'anthropic', 'apikey', [], [1, 20], [win('日', 23, 15*HR + 40*MIN), win('周', 51, 3*DAY)], {req: 117, tok: 5.6e6, cost: 4.83}),
+      acct('Kimi-11', 'kimi', 'apikey', [], [0, 5], [], {req: 30, tok: 0.9e6, cost: 0.62}, 'CNY 182.40'),
+      acct('Grok-02', 'grok', 'apikey', [], [0, 5], [], {req: 0, tok: 0, cost: 0}),
+      acct('DeepSeek-1', 'deepseek', 'apikey', [], [0, 8], [], {req: 92, tok: 2.4e6, cost: 0.71}, 'CNY 56.10'),
+    );
+    const s = snapshot(a, {summary: {total: 10, normal: 10, alert: 2}});
+    s.today.user = s.today.cost * 1.26; s.today.std = s.today.cost * 1.13; return s;
+  }},
+};
+const DATA = Object.fromEntries(Object.entries(SCENARIOS).map(([k, v]) => [k, v.make()]));
+
+// ───────────────────────── 口径与格式 ─────────────────────────
+const FLAG = {error: '错误', paused: '暂停', expired: '到期', rate_limited: '限流', overloaded: '过载', temp_unschedulable: '冷却',
+  local_quota_exceeded: '本地超限', model_rate_limited: '模型限流', quota_warning: '额度提醒'};
+const RANK = {ok: 0, unk: 1, warn: 2, crit: 3};
+const flagSev = f => ['error', 'expired', 'paused'].includes(f) ? 'crit' : 'warn';
+function winSev(w, d) {
+  if (d.stale || ['stale', 'unknown', 'waiting_sample'].includes(w.q) || (w.reset && w.reset <= now())) return 'unk';
+  return w.used >= 95 ? 'crit' : w.used >= 80 ? 'warn' : 'ok';
+}
+function acctSev(a, d) {
+  let s = 'ok';
+  const up = x => { if (RANK[x] > RANK[s]) s = x; };
+  a.flags.filter(f => f !== 'quota_warning').forEach(f => up(flagSev(f)));
+  a.windows.forEach(w => up(winSev(w, d)));
+  if (d.stale) up('unk');
+  return s;
+}
+const worstWin = (a, d) => [...a.windows].sort((x, y) => RANK[winSev(y, d)] - RANK[winSev(x, d)] || y.used - x.used)[0];
+function dur(ms) {
+  if (ms <= 0) return '0m';
+  const s = Math.floor(ms / 1000), m = Math.floor(s / 60), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60), mm = m % 60;
+  if (d) return `${d}d${h}h`;
+  if (h) return `${h}h${String(mm).padStart(2, '0')}m`;
+  if (m < 10) return `${mm}:${String(s % 60).padStart(2, '0')}`;
+  return `${mm}m`;
+}
+function winSub(w, d, long = false) {
+  if (d.stale) return '过期';
+  if (w.q === 'stale') return `过期 ${dur(now() - w.sampled)}`;
+  if (w.q === 'estimated') return long ? `估算 · ${dur(w.reset - now())} 后重置` : '估算';
+  if (w.reset && w.reset <= now()) return '待新样本';
+  if (w.reset) return long ? `${dur(w.reset - now())} 后重置` : dur(w.reset - now());
+  return '无重置时间';
+}
+const qualityLabel = (w, d) => d.stale ? '过期' : ({observed: '观测值', stale: '样本过期', estimated: '本地估算'})[w.q] || '未知';
+const pct = v => Math.round(v) + '%';
+const money = v => '$' + Number(v).toFixed(2);
+const compact = v => v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'K' : String(Math.round(v));
+const pollAgo = () => Math.floor((now() - SIM0) / 1000) % 15;
+const ICON = {wifi: '\uF1EB', refresh: '\uF021', warn: '\uF071', ok: '\uF00C', left: '\uF053', right: '\uF054', pause: '\uF04C', bell: '\uF0F3'};
+
+function attention(d) {
+  const items = [];
+  d.accounts.forEach((a, idx) => {
+    const own = [];
+    a.flags.filter(f => f !== 'quota_warning').forEach(f =>
+      own.push({sev: flagSev(f), val: FLAG[f] || f, sub: '账号状态标记', short: FLAG[f] || f, p: 200}));
+    let staleAdded = false;
+    a.windows.forEach(w => {
+      const s = winSev(w, d);
+      if (s === 'warn' || s === 'crit') own.push({sev: s, val: pct(w.used), sub: `${w.label} 额度 · ${winSub(w, d)} 后重置`, short: `${w.label} ${pct(w.used)} · ${winSub(w, d)} 后重置`, p: w.used});
+      else if (s === 'unk' && !staleAdded && !d.stale) { staleAdded = true; own.push({sev: 'unk', val: '过期', sub: `额度样本 ${dur(now() - w.sampled)} 前`, short: '额度样本过期', p: 0}); }
+    });
+    if (!own.length) return;
+    own.sort((x, y) => RANK[y.sev] - RANK[x.sev] || y.p - x.p);
+    const top = own[0], flags = own.filter(o => o !== top && o.p === 200).map(o => o.val);
+    items.push(Object.assign({}, top, {idx, title: a.alias, sub: flags.length ? `${flags.join(' / ')} · ${top.sub}` : top.sub}));
+  });
+  return items.sort((x, y) => RANK[y.sev] - RANK[x.sev] || y.p - x.p);
+}
+
+// ───────────────────────── 绘图原语（只用 LVGL 能做到的东西） ─────────────────────────
+let CTX, P, AUDIT = null;
+const SC = s => P[s];
+function R(x, y, w, h, c, r = 0) { CTX.fillStyle = c; if (r) { CTX.beginPath(); CTX.roundRect(x, y, w, h, r); CTX.fill(); } else CTX.fillRect(x, y, w, h); }
+const HL = (x1, x2, y, c = P.line) => R(x1, y, x2 - x1, 1, c);
+function dot(cx, cy, r, c) { CTX.fillStyle = c; CTX.beginPath(); CTX.arc(cx, cy, r, 0, 7); CTX.fill(); }
+const font = size => `${size}px Mont, FA, NotoSC, sans-serif`;
+function T(s, x, y, o = {}) {
+  s = String(s); const size = o.size || 14;
+  CTX.font = font(size); CTX.textAlign = o.align || 'left'; CTX.textBaseline = 'alphabetic'; CTX.fillStyle = o.color || P.text;
+  if (o.maxW && CTX.measureText(s).width > o.maxW) { while (s.length > 1 && CTX.measureText(s + '...').width > o.maxW) s = s.slice(0, -1); s += '...'; }
+  CTX.fillText(s, x, y);
+  if (AUDIT) {
+    if (/[\u3000-\u9fff]/.test(s)) AUDIT.cjk.add(size);
+    if (/[\x21-\x7e]/.test(s)) AUDIT.latin.add(size);
+    if (/[\uf000-\uf8ff]/.test(s)) AUDIT.icon.add(size);
+  }
+  return CTX.measureText(s).width;
+}
+const TW = (s, size) => { CTX.font = font(size); return CTX.measureText(String(s)).width; };
+function seq(x, y, parts) { for (const [s, o] of parts) x += T(s, x, y, o); return x; }
+function seqW(parts) { return parts.reduce((w, [s, o]) => w + TW(s, o.size || 14), 0); }
+function bar(x, y, w, h, v, c, track = P.line) {
+  R(x, y, w, h, track, h / 2);
+  const f = Math.round(w * Math.max(0, Math.min(1, v / 100)));
+  if (f > 0) R(x, y, Math.max(f, h), h, c, h / 2);
+}
+function ring(cx, cy, r, lw, v, c, track = P.line) {
+  CTX.lineWidth = lw; CTX.lineCap = 'round';
+  CTX.strokeStyle = track; CTX.beginPath(); CTX.arc(cx, cy, r, 0, Math.PI * 2); CTX.stroke();
+  const f = Math.max(0, Math.min(1, v / 100));
+  if (f > 0) { CTX.strokeStyle = c; CTX.beginPath(); CTX.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * f); CTX.stroke(); }
+}
+function chip(text, xr, y, c) {
+  const w = TW(text, 14) + 12;
+  R(xr - w, y, w, 18, mix(c, P.bg, 0.22), 4); T(text, xr - 6, y + 14, {color: c, align: 'right'});
+  return w;
+}
+function mix(a, b, t) {
+  const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const [x, y] = [p(a), p(b)];
+  return '#' + x.map((v, i) => Math.round(v * t + y[i] * (1 - t)).toString(16).padStart(2, '0')).join('');
+}
+function connText(d) {
+  return d.online ? {text: `在线 ${pollAgo()}s`, color: P.dim} : {text: `离线 ${dur(now() - d.offlineSince)}`, color: P.warn};
+}
+function segBar(x, y, w, h, n, limit, c) {
+  const k = Math.min(limit, 10), gap = 2, sw = (w - gap * (k - 1)) / k, on = Math.round(n / limit * k);
+  for (let i = 0; i < k; i++) R(Math.round(x + i * (sw + gap)), y, Math.round(sw), h, i < on ? c : P.line, 1);
+}
+
+// ───────────────────────── 方案 A · 一屏全景 ─────────────────────────
+const A = {
+  key: 'A', name: 'A · 一屏全景', tagline: '去掉 Tab，健康 / 今日 / 每账号 5h+7d 一屏看完',
+  P: {bg: '#0b0e0d', surf: '#141917', line: '#242c28', faint: '#4b5550', text: '#e9efec', dim: '#85918b', neutral: '#a9b6b0',
+      ok: '#5ed29c', warn: '#f3b54a', crit: '#ff6e61', unk: '#5e6964'},
+  init: () => ({screen: 'home', page: 0, detail: 0}),
+  thumbs: [
+    {label: '首页 · 实时快照', st: {screen: 'home'}},
+    {label: '首页 · 告警（倒计时 <10 分钟显示秒）', scenario: 'alert', st: {screen: 'home'}},
+    {label: '首页 · 离线（全部置灰）', scenario: 'offline', st: {screen: 'home'}},
+    {label: '今日详情（点按今日摘要进入）', st: {screen: 'today'}},
+    {label: '账号详情（点按账号行进入）', st: {screen: 'detail', detail: 0}},
+    {label: '10 账号 · 第 2 页（左右滑动）', scenario: 'many', st: {screen: 'home', page: 1}},
+  ],
+  hint: '点按今日摘要 → 今日详情；点按账号行 → 详情；左右拖动或点页脚两侧翻页；详情页点顶部或右滑返回。',
+  draw(st, d) { R(0, 0, W, H, P.bg); ({home: aHome, today: aToday, detail: aDetail})[st.screen](st, d); },
+  tap(st, d, x, y) {
+    if (st.screen !== 'home') { if (y < 30) st.screen = 'home'; return; }
+    const pages = Math.ceil(d.accounts.length / 3);
+    if (y >= 25 && y < 82) st.screen = 'today';
+    else if (y >= 82 && y < 220) { const i = st.page * 3 + Math.floor((y - 82) / 46); if (d.accounts[i]) { st.detail = i; st.screen = 'detail'; } }
+    else if (y >= 220) { if (x < 107) st.page = Math.max(0, st.page - 1); if (x > 213) st.page = Math.min(pages - 1, st.page + 1); }
+  },
+  swipe(st, d, dir) {
+    if (st.screen !== 'home') { if (dir > 0) st.screen = 'home'; return; }
+    st.page = Math.max(0, Math.min(Math.ceil(d.accounts.length / 3) - 1, st.page - dir));
+  },
+  notes: `
+    <h3>理念</h3><ul>
+    <li>底部 Tab 占 39px（16%），而三个视图里最常看的只有"额度"。直接去掉 Tab，把空间还给数据。</li>
+    <li>真实数据每个账号都有 5h + 7d 两个窗口，而现版只显示第一个。这里每行并排两个窗口，并附倒计时。</li>
+    <li>行首色条只在账号异常时出现，所以正常状态下画面很安静。</li></ul>
+    <h3>结构</h3><ul>
+    <li>状态栏：健康 X/Y、告警数、连接秒数（24px）</li>
+    <li>今日摘要：账号费用 / 请求 / Token，点按后进入今日详情（三种费用对比 + 账号分布）</li>
+    <li>账号区：每页 3 行，行高 46px（触摸目标足够大）；左右滑动翻页，页脚显示分页点</li></ul>`,
+  perf: ['每秒：倒计时 6 个 + 连接 1 个小标签，约 7×(50×16) px ≈ 11 KB/s', '翻页 / 进详情：整屏重绘一次，约 15 ms 传输 + 渲染', '无 arc、无透明混合，最省 CPU'],
+  fit: ['适合：账号 ≤ 9 个、放在桌面近处看', '代价：信息密度最高，1 米外读小字吃力'],
+};
+function aHome(st, d) {
+  const s = d.summary;
+  dot(13, 12, 4, d.stale ? P.unk : s.normal < s.total ? P.crit : P.ok);
+  let x = seq(23, 17, [[`${s.normal}/${s.total}`, {}], [' 正常', {color: P.dim}]]);
+  if (s.alert) seq(x + 10, 17, [[`${s.alert}`, {color: P.warn}], [' 告警', {color: P.dim}]]);
+  const c = connText(d); T(c.text, 310, 17, {color: c.color, align: 'right'});
+  HL(0, W, 24);
+  T('今日账号费用', 10, 44, {color: P.dim}); T(money(d.today.cost), 10, 73, {size: 28, color: d.stale ? P.dim : P.text});
+  T('请求', 152, 44, {color: P.dim}); T(compact(d.today.req), 152, 73, {size: 20, color: d.stale ? P.dim : P.text});
+  T('Token', 234, 44, {color: P.dim}); T(compact(d.today.tok), 234, 73, {size: 20, color: d.stale ? P.dim : P.text});
+  T(ICON.right, 312, 44, {size: 12, color: P.faint, align: 'right'});
+  HL(0, W, 81);
+  const pages = Math.ceil(d.accounts.length / 3), pg = Math.min(st.page, pages - 1);
+  const rows = d.accounts.slice(pg * 3, pg * 3 + 3);
+  rows.forEach((a, i) => aRow(a, 82 + i * 46, d, i < rows.length - 1));
+  T('Sub2API', 10, 235, {size: 12, color: P.faint});
+  T(`${pg + 1}/${pages} 页`, 310, 235, {size: 12, color: P.faint, align: 'right'});
+  if (pages > 1) { let px = 160 - (pages * 10 - 4) / 2 - 4; for (let i = 0; i < pages; i++) { if (i === pg) { R(px, 228, 14, 5, P.dim, 2.5); px += 20; } else { dot(px + 2.5, 230.5, 2.5, P.faint); px += 11; } } }
+}
+function aRow(a, top, d, divider) {
+  const sv = acctSev(a, d);
+  if (sv !== 'ok') R(0, top + 6, 3, 34, SC(sv));
+  T(a.alias, 10, top + 20, {size: 16, maxW: 96});
+  const f = a.flags[0];
+  if (f) T(FLAG[f], 10, top + 43, {color: d.stale ? P.unk : SC(flagSev(f))});
+  else T(`并发 ${a.conc}/${a.limit}`, 10, top + 43, {color: P.dim});
+  if (a.windows.length) {
+    aSlot(112, 94, top, a.windows[0], d);
+    if (a.windows[1]) aSlot(216, 94, top, a.windows[1], d);
+  } else {
+    T(a.balance ? '余额' : '未采样', 112, top + 20, {color: P.dim});
+    if (a.balance) T(a.balance, 310, top + 20, {size: 20, align: 'right'});
+    T(a.balance ? '无额度窗口' : '暂无额度样本', 112, top + 43, {color: P.unk});
+  }
+  if (divider) HL(10, 310, top + 45);
+}
+function aSlot(x, w, top, win, d) {
+  const sv = winSev(win, d), c = SC(sv);
+  T(win.label, x, top + 20, {color: P.dim});
+  T(pct(win.used), x + w, top + 20, {size: 20, color: c, align: 'right'});
+  bar(x, top + 25, w, 4, win.used, c);
+  T(winSub(win, d), x, top + 43, {color: sv === 'unk' ? P.unk : P.dim});
+}
+function aHeader(title, right, rightColor) {
+  T(ICON.left, 10, 17, {size: 14, color: P.dim}); T(title, 26, 17, {size: 16, maxW: 150});
+  HL(0, W, 24);
+}
+function aToday(st, d) {
+  aHeader('今日'); T(`${d.date} · ${d.tz}`, 310, 17, {size: 12, color: P.dim, align: 'right'});
+  const t = d.today;
+  T('账号费用', 10, 46, {color: P.dim}); T(money(t.cost), 10, 88, {size: 40});
+  T('请求', 196, 50, {color: P.dim}); T(compact(t.req), 310, 50, {size: 20, align: 'right'});
+  T('Token', 196, 82, {color: P.dim}); T(compact(t.tok), 310, 82, {size: 20, align: 'right'});
+  HL(10, 310, 100);
+  T('模型分布', 10, 120, {color: P.dim});
+  T('请求', 180, 120, {color: P.faint, align: 'right'}); T('Token', 240, 120, {color: P.faint, align: 'right'}); T('账号费用', 310, 120, {color: P.faint, align: 'right'});
+  const total = d.models.reduce((s, m) => s + m.tok, 0);
+  if (!total) { R(10, 128, 300, 6, P.line); T('今日暂无模型用量', 10, 158, {color: P.unk}); return; }
+  const shades = [P.text, P.neutral, P.dim, P.faint];
+  let x = 10;
+  d.models.forEach((m, i) => { const w = i === d.models.length - 1 ? 310 - x : Math.round(m.tok / total * 300); R(x, 128, Math.max(w - 2, 1), 6, shades[i]); x += w; });
+  d.models.forEach((m, i) => {
+    const y = 158 + i * 22;
+    R(10, y - 8, 6, 6, shades[i]);
+    T(m.name ?? `其余 ${m.other} 个`, 22, y, {color: m.name ? P.neutral : P.dim, maxW: 116});
+    T(compact(m.req), 180, y, {align: 'right'}); T(compact(m.tok), 240, y, {align: 'right'}); T(money(m.cost), 310, y, {align: 'right'});
+  });
+}
+function aDetail(st, d) {
+  const a = d.accounts[st.detail];
+  aHeader(a.alias);
+  if (a.flags[0]) chip(FLAG[a.flags[0]], 310, 3, d.stale ? P.unk : SC(flagSev(a.flags[0])));
+  let y = 30;
+  a.windows.slice(0, 2).forEach(w => {
+    const sv = winSev(w, d), c = SC(sv);
+    T(`${w.label} 窗口`, 10, y + 20, {size: 16});
+    T(pct(w.used), 310, y + 24, {size: 28, color: c, align: 'right'});
+    bar(10, y + 31, 300, 6, w.used, c);
+    T(winSub(w, d, true), 10, y + 54, {color: sv === 'unk' ? P.unk : P.dim});
+    T(qualityLabel(w, d), 310, y + 54, {color: P.faint, align: 'right'});
+    y += 60;
+  });
+  if (!a.windows.length) { T(a.balance ? `余额 ${a.balance}` : '未采样', 10, 60, {size: 20, color: a.balance ? P.text : P.unk}); T('该账号没有额度窗口', 10, 84, {color: P.dim}); }
+  HL(10, 310, 152);
+  T('并发', 10, 174, {color: P.dim}); segBar(60, 166, 180, 8, a.conc, a.limit, P.neutral); T(`${a.conc}/${a.limit}`, 310, 174, {align: 'right'});
+  T('今日', 10, 200, {color: P.dim}); T(`${money(a.today.cost)} · ${a.today.req} 次 · ${compact(a.today.tok)}`, 310, 200, {align: 'right'});
+  T('平台', 10, 226, {color: P.dim}); T(`${a.platform} · ${a.type}`, 310, 226, {align: 'right', color: P.dim});
+}
+
+// ───────────────────────── 方案 B · 告警优先 ─────────────────────────
+const B = {
+  key: 'B', name: 'B · 告警优先', tagline: '首页只回答"现在要不要处理"，按严重度排出关注队列',
+  P: {bg: '#0f0d0b', surf: '#1a1714', line: '#2b2621', faint: '#4f4841', text: '#f2ece4', dim: '#958a7e', neutral: '#c9bba8', accent: '#e9c58f',
+      ok: '#7cd38a', warn: '#f5b041', crit: '#ff6b57', unk: '#615950'},
+  init: () => ({screen: 'triage', page: 0, detail: 0}),
+  thumbs: [
+    {label: '关注 · 实时快照', st: {screen: 'triage'}},
+    {label: '关注 · 告警', scenario: 'alert', st: {screen: 'triage'}},
+    {label: '额度 · 同心环（外 5h / 内 7d）', st: {screen: 'quota'}},
+    {label: '额度 · 10 账号第 2 页', scenario: 'many', st: {screen: 'quota', page: 1}},
+    {label: '今日 · 费用对比 + 差额 + 分布', st: {screen: 'today'}},
+    {label: '账号详情', st: {screen: 'detail', detail: 0}},
+  ],
+  hint: '点按底部 Tab 切换；在"关注"页点条目进入详情、点环进入额度；在"额度"页左右拖动翻页、点卡片进入详情。',
+  draw(st, d) {
+    R(0, 0, W, H, P.bg);
+    ({triage: bTriage, quota: bQuota, today: bToday, detail: bDetail})[st.screen](st, d);
+    bTabs(st, d);
+  },
+  tap(st, d, x, y) {
+    if (y >= 204) { st.screen = ['triage', 'quota', 'today'][Math.min(2, Math.floor(x / 107))]; return; }
+    if (st.screen === 'triage') {
+      if (x < 128) { st.screen = 'quota'; return; }
+      const it = attention(d)[Math.floor((y - 50) / 48)];
+      if (y >= 50 && it) { st.detail = it.idx; st.screen = 'detail'; st.page = Math.floor(it.idx / 3); }
+    } else if (st.screen === 'quota') {
+      const i = st.page * 3 + Math.min(2, Math.floor((x - 7) / 103));
+      if (y >= 30 && y < 196 && d.accounts[i]) { st.detail = i; st.screen = 'detail'; }
+    } else if (st.screen === 'detail' && y < 30) st.screen = 'quota';
+  },
+  swipe(st, d, dir) {
+    if (st.screen === 'detail') { if (dir > 0) st.screen = 'quota'; return; }
+    if (st.screen === 'quota') st.page = Math.max(0, Math.min(Math.ceil(d.accounts.length / 3) - 1, st.page - dir));
+  },
+  notes: `
+    <h3>理念</h3><ul>
+    <li>账号正常时不需要逐个看数字。首页只放"关注队列"：额度 ≥80%、状态标记（限流 / 错误）、样本过期，按严重度排序。</li>
+    <li>队列为空时显示"一切正常"和下一次重置时间，画面很安静。</li>
+    <li>额度页用同心环卡片（外环 5h、内环 7d），一页 3 个账号，扫一眼就能比较。</li></ul>
+    <h3>结构</h3><ul>
+    <li>保留 3 个 Tab（关注 / 额度 / 今日），高度从 39px 降到 36px，并给"关注"加角标。</li>
+    <li>今日页新增"计费差额"（用户计费 − 账号费用）和账号分布条。</li>
+    <li>需要固件解析 <code>accounts[].today</code>，bridge 已经下发该字段。</li></ul>`,
+  perf: ['lv_arc 抗锯齿较贵：额度页最多 6 条弧，只在快照变化（15s）或翻页时重绘', '每秒：倒计时 3 处 + 连接秒数', '切 Tab：整屏重绘约 20–30 ms，硬切换'],
+  fit: ['适合：账号多，平时少看、出事才看', '代价：正常数字要多点一下才能看到'],
+};
+function bStatus(d, left) {
+  T(left || 'Sub2API', 10, 17, {color: P.dim});
+  const c = connText(d); T(c.text, 310, 17, {color: c.color, align: 'right'});
+  HL(0, W, 24);
+}
+function bTabs(st, d) {
+  R(0, 204, W, 36, P.surf);
+  const tab = st.screen === 'detail' ? 1 : ['triage', 'quota', 'today'].indexOf(st.screen), items = attention(d);
+  ['关注', '额度', '今日'].forEach((l, i) => {
+    const cx = 53 + i * 107;
+    T(l, cx, 228, {size: 16, color: i === tab ? P.text : P.dim, align: 'center'});
+    if (i === tab) R(cx - 22, 204, 44, 2, P.accent);
+    if (i === 0 && items.length) { const c = SC(items[0].sev); R(cx + 19, 213, TW(items.length, 12) + 10, 15, c, 7.5); T(items.length, cx + 24, 225, {size: 12, color: P.bg}); }
+  });
+}
+function bTriage(st, d) {
+  bStatus(d);
+  const s = d.summary, cx = 66, cy = 106;
+  ring(cx, cy, 50, 10, d.stale ? 100 : s.normal / s.total * 100, d.stale ? P.unk : P.ok, s.normal < s.total ? P.crit : P.line);
+  T(`${s.normal}/${s.total}`, cx, cy + 3, {size: 28, align: 'center', color: d.stale ? P.dim : P.text});
+  T('列表正常', cx, cy + 23, {color: P.dim, align: 'center'});
+  T(`今日 ${money(d.today.cost)}`, cx, 190, {color: P.dim, align: 'center'});
+  const items = attention(d);
+  if (d.stale) {
+    T(ICON.warn, 222, 100, {size: 28, color: P.warn, align: 'center'});
+    T('数据已过期', 222, 132, {size: 16, align: 'center'});
+    T(`最后同步 ${dur(now() - d.offlineSince)} 前`, 222, 156, {color: P.dim, align: 'center'});
+    return;
+  }
+  seq(136, 44, [['需要关注', {color: P.dim}], [` ${items.length}`, {}]]);
+  if (!items.length) {
+    T(ICON.ok, 222, 112, {size: 28, color: P.ok, align: 'center'});
+    T('一切正常', 222, 142, {size: 16, align: 'center'});
+    return;
+  }
+  items.slice(0, 3).forEach((it, k) => {
+    const top = 50 + k * 48, c = SC(it.sev);
+    R(136, top + 6, 3, 34, c);
+    T(it.title, 146, top + 21, {size: 16, maxW: 100});
+    T(it.val, 310, top + 22, {size: /[一-鿿]/.test(it.val) ? 16 : 20, color: c, align: 'right'});
+    T(it.sub, 146, top + 41, {color: P.dim, maxW: 164});
+    if (k < 2) HL(146, 310, top + 47);
+  });
+}
+function bQuota(st, d) {
+  bStatus(d, '额度');
+  const pages = Math.ceil(d.accounts.length / 3), pg = Math.min(st.page, pages - 1);
+  T(`${pg + 1}/${pages}`, 160, 17, {color: P.faint, align: 'center'});
+  d.accounts.slice(pg * 3, pg * 3 + 3).forEach((a, i) => bCard(a, 7 + i * 103, 30, 99, 168, d));
+}
+function bCard(a, x, y, w, h, d) {
+  R(x, y, w, h, P.surf, 6);
+  const sv = acctSev(a, d), cx = x + w / 2, cy = y + 72;
+  T(a.alias, x + 9, y + 20, {maxW: w - 26});
+  if (sv !== 'ok') dot(x + w - 11, y + 15, 3.5, SC(sv));
+  const [w0, w1] = a.windows;
+  ring(cx, cy, 34, 7, w0 ? w0.used : 0, w0 ? SC(winSev(w0, d)) : P.line);
+  if (w1) ring(cx, cy, 24, 7, w1.used, SC(winSev(w1, d)));
+  if (!w0) {
+    T(a.balance ? '余额' : '未采样', cx, cy + 6, {align: 'center', color: a.balance ? P.dim : P.unk});
+    if (a.balance) { T(a.balance.split(' ')[1], cx, y + 128, {size: 20, align: 'center'}); T(a.balance.split(' ')[0], cx, y + 150, {size: 12, color: P.dim, align: 'center'}); }
+    return;
+  }
+  const ww = worstWin(a, d), wc = SC(winSev(ww, d)), num = String(Math.round(ww.used)), tw = TW(num, 20) + TW('%', 12);
+  seq(cx - tw / 2, cy + 7, [[num, {size: 20, color: wc}], ['%', {size: 12, color: wc}]]);
+  [w0, w1].forEach((wn, k) => {
+    if (!wn) return;
+    const yy = y + 126 + k * 19;
+    T(wn.label, x + 10, yy, {color: P.dim});
+    T(pct(wn.used), x + w - 10, yy, {color: SC(winSev(wn, d)), align: 'right'});
+  });
+  const sub = winSub(ww, d);
+  if (/[一-鿿]/.test(sub)) T(sub, cx, y + 160, {color: P.unk, align: 'center'});
+  else T(`${ICON.refresh} ${sub}`, cx, y + 160, {size: 12, color: P.dim, align: 'center'});
+}
+function bToday(st, d) {
+  bStatus(d, `今日 ${d.date} · ${d.tz}`);
+  const t = d.today;
+  T('账号费用', 10, 46, {color: P.dim}); T(money(t.cost), 10, 88, {size: 40});
+  const diff = t.user - t.cost;
+  [['用户计费', money(t.user), P.text], ['标准费用', money(t.std), P.text], ['计费差额', (diff >= 0 ? '+' : '-') + money(Math.abs(diff)), diff > 0.005 ? P.ok : P.dim]]
+    .forEach(([l, v, c], i) => { T(l, 190, 46 + i * 22, {color: P.dim}); T(v, 310, 46 + i * 22, {align: 'right', color: c}); });
+  HL(10, 310, 104);
+  const sorted = k => [...d.accounts].sort((a, b) => b.today[k] - a.today[k]);
+  [['请求', 'req'], ['Token 含缓存', 'tok']].forEach(([l, k], i) => {
+    const x = 10 + i * 155, total = t[k], acc = sorted(k);
+    T(l, x, 126, {color: P.dim}); T(compact(total), x, 160, {size: 28});
+    let bx = x; const shades = [P.neutral, P.dim, P.faint, P.line];
+    const parts = acc.slice(0, 3).map(a => a.today[k]); if (acc.length > 3) parts.push(acc.slice(3).reduce((s, a) => s + a.today[k], 0));
+    parts.forEach((v, j) => { const w = Math.round(v / total * 145); R(bx, 170, Math.max(w - 2, 1), 6, shades[j]); bx += w; });
+    T(`${acc[0].alias} ${Math.round(acc[0].today[k] / total * 100)}%`, x, 194, {size: 12, color: P.dim});
+  });
+}
+function bDetail(st, d) {
+  const a = d.accounts[st.detail];
+  T(ICON.left, 10, 17, {size: 14, color: P.dim}); T(a.alias, 26, 17, {size: 16, maxW: 150});
+  if (a.flags[0]) chip(FLAG[a.flags[0]], 310, 3, d.stale ? P.unk : SC(flagSev(a.flags[0])));
+  HL(0, W, 24);
+  const cx = 66, cy = 104, [w0, w1] = a.windows;
+  ring(cx, cy, 46, 9, w0 ? w0.used : 0, w0 ? SC(winSev(w0, d)) : P.line);
+  if (w1) ring(cx, cy, 33, 9, w1.used, SC(winSev(w1, d)));
+  if (w0) { const ww = worstWin(a, d), c = SC(winSev(ww, d)), num = String(Math.round(ww.used)), tw = TW(num, 28) + TW('%', 14); seq(cx - tw / 2, cy + 10, [[num, {size: 28, color: c}], ['%', {size: 14, color: c}]]); }
+  T(`并发 ${a.conc}/${a.limit}`, cx, 182, {color: P.dim, align: 'center'});
+  let y = 32;
+  a.windows.slice(0, 2).forEach(wn => {
+    const sv = winSev(wn, d), c = SC(sv);
+    T(`${wn.label} 窗口`, 136, y + 16, {size: 16}); T(pct(wn.used), 310, y + 18, {size: 20, color: c, align: 'right'});
+    bar(136, y + 25, 174, 4, wn.used, c);
+    T(winSub(wn, d, true), 136, y + 46, {color: sv === 'unk' ? P.unk : P.dim});
+    y += 56;
+  });
+  if (!w0) { T(a.balance ? `余额 ${a.balance}` : '未采样', 136, 60, {size: 16, color: a.balance ? P.text : P.unk}); }
+  HL(136, 310, 148);
+  T('今日', 136, 170, {color: P.dim}); T(money(a.today.cost), 310, 170, {align: 'right'});
+  T('请求 · Token', 136, 192, {color: P.dim}); T(`${a.today.req} · ${compact(a.today.tok)}`, 310, 192, {align: 'right'});
+}
+
+// ───────────────────────── 方案 C · 大字轮播 ─────────────────────────
+const SHIFTS = [[0, 0], [1, 1], [2, 0], [1, -1], [0, 1], [-1, 0]];
+const C = {
+  key: 'C', name: 'C · 大字轮播', tagline: '1–2 米外可读，每 8 秒切一张卡，红色横幅常驻告警',
+  P: {bg: '#000000', surf: '#111111', line: '#222222', faint: '#3d3d3d', text: '#e6e6e6', dim: '#8a8a8a', neutral: '#bdbdbd',
+      ok: '#3ddc97', warn: '#ffc145', crit: '#ff6159', unk: '#5c5c5c'},
+  init: () => ({card: 0, pinned: false, since: Date.now(), live: true}),
+  thumbs: [
+    {label: '今日费用卡', st: {card: 0, pinned: false}},
+    {label: '账号健康卡', st: {card: 1, pinned: false}},
+    {label: '账号卡 · Claude-20', st: {card: 2, pinned: false}},
+    {label: '账号卡 · 告警横幅常驻', scenario: 'alert', st: {card: 2, pinned: false}},
+    {label: '10 账号 · 其余账号汇总卡', scenario: 'many', st: {card: 5, pinned: true}},
+    {label: '离线 · 数据过期', scenario: 'offline', st: {card: 2, pinned: false}},
+  ],
+  hint: '每 8 秒自动换卡；点左侧或右侧三分之一切换，点中间固定当前卡（顶部出现暂停图标）。画面每轮整体偏移 1–2 px，用于防残影。',
+  draw(st, d) {
+    R(0, 0, W, H, P.bg);
+    const cards = cCards(d), i = ((st.card % cards.length) + cards.length) % cards.length;
+    const [dx, dy] = st.live ? SHIFTS[Math.floor(now() / (8000 * cards.length)) % SHIFTS.length] : [0, 0];
+    CTX.save(); CTX.translate(dx, dy);
+    let x = 12;
+    cards.forEach((_, k) => { if (k === i) { R(x, 7, 14, 5, P.text, 2.5); x += 20; } else { dot(x + 2.5, 9.5, 2.5, P.faint); x += 11; } });
+    if (st.pinned) T(ICON.pause, x + 4, 14, {size: 12, color: P.dim});
+    if (d.online) { const t = `${pollAgo()}s`; T(t, 308, 15, {size: 12, color: P.dim, align: 'right'}); T(ICON.wifi, 304 - TW(t, 12), 15, {size: 12, color: P.dim, align: 'right'}); }
+    else T(`离线 ${dur(now() - d.offlineSince)}`, 308, 16, {color: P.warn, align: 'right'});
+    const card = cards[i];
+    ({today: cToday, health: cHealth, acct: cAcct, rest: cRest})[card.t](card, d);
+    CTX.restore();
+    const crit = d.stale ? [] : attention(d).filter(it => it.sev === 'crit');
+    if (crit.length) {
+      R(0, 214, W, 26, P.crit);
+      T(`${ICON.warn}  ${crit[0].title} ${crit[0].short}${crit.length > 1 ? `  +${crit.length - 1}` : ''}`, 10, 232, {color: '#000000', maxW: 300});
+    } else if (!st.pinned && st.live) {
+      R(0, 238, Math.round(W * Math.min(1, (Date.now() - st.since) / 8000)), 2, P.faint);
+    }
+  },
+  tick(st, d) {
+    if (st.pinned || !st.live) return false;
+    if (Date.now() - st.since >= 8000) { st.card = (st.card + 1) % cCards(d).length; st.since = Date.now(); return true; }
+  },
+  tap(st, d, x) {
+    const n = cCards(d).length;
+    if (x < 107) { st.card = (st.card - 1 + n) % n; st.since = Date.now(); }
+    else if (x > 213) { st.card = (st.card + 1) % n; st.since = Date.now(); }
+    else { st.pinned = !st.pinned; st.since = Date.now(); }
+  },
+  swipe(st, d, dir) { const n = cCards(d).length; st.card = (st.card - dir + n) % n; st.since = Date.now(); },
+  notes: `
+    <h3>理念</h3><ul>
+    <li>当作桌面摆件：一张卡只讲一件事，主数字 56–64px，1–2 米外也能看清。</li>
+    <li>卡片顺序：今日费用 → 账号健康 → 按严重度排序的账号卡；账号超过 4 个时，正常账号合并成一张汇总卡。</li>
+    <li>出现严重告警（≥95% 或错误）时，底部红色横幅常驻，不随轮播消失。</li></ul>
+    <h3>防残影</h3><ul>
+    <li>纯黑底，内容每轮整体偏移 1–2 px，不会长期在同一位置显示高亮静态文字。</li>
+    <li>可选夜间降低背光，需要把 GPIO42 从普通 GPIO 改为 LEDC PWM。</li></ul>`,
+  perf: ['切卡：整屏重绘约 25 ms，硬切换；不做滑动或淡入（SPI 无 TE 同步会撕裂，全屏 alpha 混合也很贵）', '进度条：320×2 px，约 10 fps', '新增字库：Montserrat 56/64 数字子集，约 20–30 KB Flash'],
+  fit: ['适合：放在显示器旁、远看、少触摸', '代价：同一时间只看到一部分，想查某个值要等或手动翻'],
+};
+function cCards(d) {
+  const sorted = d.accounts.map((a, idx) => ({a, idx, s: acctSev(a, d)})).sort((x, y) => RANK[y.s] - RANK[x.s]);
+  const cards = [{t: 'today'}, {t: 'health'}];
+  if (d.accounts.length <= 4) sorted.forEach(o => cards.push({t: 'acct', a: o.a}));
+  else {
+    const hot = sorted.filter(o => o.s !== 'ok').slice(0, 3);
+    hot.forEach(o => cards.push({t: 'acct', a: o.a}));
+    cards.push({t: 'rest', list: sorted.filter(o => !hot.includes(o)).map(o => o.a)});
+  }
+  return cards;
+}
+function cToday(card, d) {
+  const t = d.today, c = d.stale ? P.dim : P.text;
+  T('今日账号费用', 14, 50, {size: 16, color: P.dim});
+  T(money(t.cost), 11, 118, {size: 64, color: c});
+  seq(14, 164, [[compact(t.req), {size: 28, color: c}], [' 请求', {size: 16, color: P.dim}]]);
+  seq(170, 164, [[compact(t.tok), {size: 28, color: c}], [' Token', {size: 16, color: P.dim}]]);
+  T(`用户计费 ${money(t.user)} · 标准 ${money(t.std)}`, 14, 198, {color: P.dim});
+}
+function cHealth(card, d) {
+  const s = d.summary;
+  T('列表状态正常', 14, 50, {size: 16, color: P.dim});
+  seq(11, 118, [[`${s.normal}`, {size: 64, color: d.stale ? P.dim : s.normal < s.total ? P.warn : P.ok}], [`/${s.total}`, {size: 28, color: P.dim}]]);
+  T('个账号', 14, 146, {color: P.dim});
+  T('告警账号', 190, 50, {size: 16, color: P.dim});
+  T(s.alert, 190, 98, {size: 40, color: s.alert && !d.stale ? P.warn : P.dim});
+  const counts = {};
+  d.accounts.forEach(a => { a.flags.forEach(f => counts[FLAG[f]] = (counts[FLAG[f]] || 0) + 1); if (a.windows.some(w => w.q === 'stale')) counts['样本过期'] = (counts['样本过期'] || 0) + 1; });
+  Object.entries(counts).slice(0, 4).forEach(([k, v], i) => { T(k, 190, 128 + i * 22, {color: P.dim}); T(v, 306, 128 + i * 22, {align: 'right'}); });
+}
+function cAcct(card, d) {
+  const a = card.a;
+  const aw = T(a.alias, 14, 50, {size: 20});
+  T(a.platform, 22 + aw, 50, {color: P.dim});
+  if (a.flags[0]) chip(FLAG[a.flags[0]], 306, 35, d.stale ? P.unk : SC(flagSev(a.flags[0])));
+  if (!a.windows.length) {
+    T(a.balance ? a.balance : '未采样', 14, 118, {size: a.balance ? 40 : 28, color: a.balance ? P.text : P.unk});
+    T(a.balance ? '余额' : '暂无额度样本', 14, 146, {size: 16, color: P.dim});
+  }
+  a.windows.slice(0, 2).forEach((wn, k) => {
+    const x = 14 + k * 154, sv = winSev(wn, d), c = SC(sv);
+    seq(x - 2, 118, [[Math.round(wn.used), {size: 56, color: c}], ['%', {size: 28, color: c}]]);
+    seq(x, 146, [[wn.label, {size: 16}], ['  ' + winSub(wn, d, true), {color: sv === 'unk' ? P.unk : P.dim}]]);
+    bar(x, 156, 138, 6, wn.used, c);
+  });
+  T(`并发 ${a.conc}/${a.limit} · 今日 ${money(a.today.cost)} · ${a.today.req} 次`, 14, 198, {color: P.dim});
+}
+function cRest(card, d) {
+  T(`其余 ${card.list.length} 个账号`, 14, 50, {size: 16, color: P.dim});
+  card.list.slice(0, 8).forEach((a, i) => {
+    const x = 14 + (i % 2) * 154, y = 82 + Math.floor(i / 2) * 30, ww = a.windows.length ? worstWin(a, d) : null;
+    T(a.alias, x, y, {size: 16, maxW: 90});
+    if (ww) T(pct(ww.used), x + 138, y, {size: 20, color: SC(winSev(ww, d)), align: 'right'});
+    else T(a.balance ? a.balance.split(' ')[1] : '未采样', x + 138, y, {color: a.balance ? P.dim : P.unk, align: 'right'});
+  });
+}
+
+// ───────────────────────── 宿主：渲染、交互、缩略图 ─────────────────────────
+const DESIGNS = {A, B, C};
+const ui = {design: 'A', scenario: 'live', scale: 2, q565: true};
+const states = {A: A.init(), B: B.init(), C: C.init()};
+const lcd = document.getElementById('lcd'), lctx = lcd.getContext('2d');
+const off = document.createElement('canvas'); off.width = W; off.height = H;
+const octx = off.getContext('2d', {willReadFrequently: true});
+
+function quantize(ctx) {
+  const img = ctx.getImageData(0, 0, W, H), p = img.data;
+  for (let i = 0; i < p.length; i += 4) {
+    const r = p[i] >> 3, g = p[i + 1] >> 2, b = p[i + 2] >> 3;
+    p[i] = (r << 3) | (r >> 2); p[i + 1] = (g << 2) | (g >> 4); p[i + 2] = (b << 3) | (b >> 2);
+  }
+  ctx.putImageData(img, 0, 0);
+}
+function renderTo(ctx, design, st, scenario, audit) {
+  CTX = ctx; P = design.P; AUDIT = audit || null;
+  ctx.save(); ctx.clearRect(0, 0, W, H); design.draw(st, DATA[scenario]); ctx.restore();
+  if (ui.q565) quantize(ctx);
+  AUDIT = null;
+}
+let audit = {cjk: new Set(), latin: new Set(), icon: new Set()};
+function render() {
+  const design = DESIGNS[ui.design], st = states[ui.design];
+  renderTo(octx, design, st, ui.scenario, audit);
+  lctx.imageSmoothingEnabled = false;
+  lctx.drawImage(off, 0, 0, lcd.width, lcd.height);
+}
+function setupCanvas() {
+  lcd.width = W * 4; lcd.height = H * 4;
+  lcd.style.width = W * ui.scale + 'px'; lcd.style.height = H * ui.scale + 'px';
+}
+
+let thumbCanvases = [];
+function buildThumbs() {
+  const design = DESIGNS[ui.design], box = document.getElementById('thumbs');
+  box.innerHTML = ''; thumbCanvases = [];
+  design.thumbs.forEach(t => {
+    const el = document.createElement('div'); el.className = 'thumb';
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const p = document.createElement('p'); p.textContent = t.label;
+    el.append(c, p); box.append(el);
+    el.onclick = () => {
+      ui.scenario = t.scenario || 'live';
+      states[ui.design] = Object.assign(design.init(), structuredClone(t.st));
+      syncControls(); render(); window.scrollTo({top: 0, behavior: 'smooth'});
+    };
+    thumbCanvases.push([c, t]);
+  });
+  document.getElementById('stripTitle').textContent = `${design.name} · 全部页面（约实物尺寸，点击载入上方交互屏）`;
+}
+function renderThumbs() {
+  const design = DESIGNS[ui.design];
+  thumbCanvases.forEach(([c, t]) => {
+    const st = Object.assign(design.init(), structuredClone(t.st), {live: false});
+    renderTo(c.getContext('2d', {willReadFrequently: true}), design, st, t.scenario || 'live', audit);
+  });
+}
+function notes() {
+  const d = DESIGNS[ui.design], fmt = s => [...s].sort((a, b) => a - b).join(' / ') || '—';
+  document.getElementById('notes').innerHTML = `
+    <h2>${d.name}</h2><p class="tag">${d.tagline}</p>${d.notes}
+    <h3>性能预算</h3><ul>${d.perf.map(x => `<li>${x}</li>`).join('')}</ul>
+    <h3>取舍</h3><ul>${d.fit.map(x => `<li>${x}</li>`).join('')}</ul>
+    <h3>字库需求（根据本方案实际绘制结果统计）</h3>
+    <div class="audit">中文子集：${fmt(audit.cjk)} px<br>Montserrat：${fmt(audit.latin)} px<br>LVGL 图标：${fmt(audit.icon)} px</div>
+    <p class="tag" style="margin-top:8px;font-size:12px">现有字库为 Montserrat 14/20/28 + 中文 16。缺少的字号可以用 <kbd>scripts/generate_font.py</kbd>（lv_font_conv）生成子集；中文字形按源码自动收集。</p>`;
+}
+
+function syncControls() {
+  document.querySelectorAll('#designs button').forEach(b => b.classList.toggle('on', b.dataset.k === ui.design));
+  document.querySelectorAll('#scen button').forEach(b => b.classList.toggle('on', b.dataset.k === ui.scenario));
+  document.querySelectorAll('#scale button').forEach(b => b.classList.toggle('on', +b.dataset.k === ui.scale));
+  document.getElementById('hint').textContent = DESIGNS[ui.design].hint;
+}
+function selectDesign(k) {
+  ui.design = k; audit = {cjk: new Set(), latin: new Set(), icon: new Set()};
+  syncControls(); buildThumbs(); renderThumbs(); render(); notes();
+}
+
+document.getElementById('designs').innerHTML = Object.values(DESIGNS).map(d => `<button data-k="${d.key}"><strong>${d.name}</strong><span>${d.tagline}</span></button>`).join('');
+document.querySelectorAll('#designs button').forEach(b => b.onclick = () => selectDesign(b.dataset.k));
+document.getElementById('scen').innerHTML = Object.entries(SCENARIOS).map(([k, v]) => `<button data-k="${k}">${v.label}</button>`).join('');
+document.querySelectorAll('#scen button').forEach(b => b.onclick = () => {
+  ui.scenario = b.dataset.k; const st = states[ui.design]; st.page = 0; if (st.screen === 'detail') st.detail = 0;
+  syncControls(); render();
+});
+document.getElementById('scale').innerHTML = [2, 3].map(s => `<button data-k="${s}">${s}×</button>`).join('');
+document.querySelectorAll('#scale button').forEach(b => b.onclick = () => { ui.scale = +b.dataset.k; setupCanvas(); syncControls(); render(); });
+document.getElementById('q565').onchange = e => { ui.q565 = e.target.checked; render(); renderThumbs(); };
+document.getElementById('reset').onclick = () => { states[ui.design] = DESIGNS[ui.design].init(); render(); };
+
+let down = null;
+const toLcd = e => { const r = lcd.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+lcd.addEventListener('pointerdown', e => { down = toLcd(e); lcd.setPointerCapture(e.pointerId); });
+lcd.addEventListener('pointerup', e => {
+  if (!down) return;
+  const [x, y] = toLcd(e), dx = x - down[0], dy = y - down[1], design = DESIGNS[ui.design], st = states[ui.design], d = DATA[ui.scenario];
+  if (Math.abs(dx) > 25 && Math.abs(dx) > Math.abs(dy)) design.swipe(st, d, Math.sign(dx));
+  else design.tap(st, d, down[0], down[1]);
+  down = null; render();
+});
+
+
+const FONTS = [
+  ['Mont', '/firmware/managed_components/lvgl__lvgl/scripts/built_in_font/Montserrat-Medium.ttf'],
+  ['FA', '/firmware/managed_components/lvgl__lvgl/scripts/built_in_font/FontAwesome5-Solid+Brands+Regular.woff'],
+  ['NotoSC', '/.tools/NotoSansCJKsc-Regular.otf'],
+];
+Promise.allSettled(FONTS.map(([name, url]) => new FontFace(name, `url(${url})`).load().then(f => document.fonts.add(f)))).then(results => {
+  const failed = results.map((r, i) => r.status === 'rejected' ? FONTS[i][0] : null).filter(Boolean);
+  if (failed.length) document.querySelector('.sub').textContent += `（字体加载失败：${failed.join(', ')}，已回退系统字体；请在仓库根目录用 http 服务打开本页）`;
+  setupCanvas(); selectDesign(new URLSearchParams(location.search).get('d') || 'A');
+  if (new URLSearchParams(location.search).get('s')) { ui.scenario = new URLSearchParams(location.search).get('s'); syncControls(); render(); }
+  setInterval(() => {
+    const design = DESIGNS[ui.design], st = states[ui.design];
+    design.tick?.(st, DATA[ui.scenario]);
+    render();
+  }, 250);
+  setInterval(renderThumbs, 1000);
+});
+</script>
+</body>
+</html>

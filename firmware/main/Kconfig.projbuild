@@ -1,0 +1,36 @@
+menu "Display board"
+config DISPLAY_DEMO
+    bool "Show demo data until provisioned"
+    default y
+config DISPLAY_LCD_SWAP_XY
+    bool "LCD swap X/Y (landscape)"
+    default y
+config DISPLAY_LCD_MIRROR_X
+    bool "LCD mirror X"
+    default y
+config DISPLAY_LCD_MIRROR_Y
+    bool "LCD mirror Y"
+    default n
+config DISPLAY_LCD_INVERT
+    bool "Invert LCD colors"
+    default y
+config DISPLAY_LCD_PCLK_MHZ
+    int "LCD SPI clock (MHz)"
+    range 10 80
+    default 80
+config DISPLAY_LCD_X_GAP
+    int "LCD X offset"
+    default 0
+config DISPLAY_LCD_Y_GAP
+    int "LCD Y offset"
+    default 0
+config DISPLAY_TOUCH_SWAP_XY
+    bool "Touch swap X/Y (calibrate to PCB)"
+    default y
+config DISPLAY_TOUCH_MIRROR_X
+    bool "Touch mirror X"
+    default y
+config DISPLAY_TOUCH_MIRROR_Y
+    bool "Touch mirror Y"
+    default n
+endmenu

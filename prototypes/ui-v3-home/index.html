@@ -1,0 +1,740 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESP32 屏幕 UI v3 · 首页方案选择</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#e9ebe8;color:#1d2320;font:14px/1.55 -apple-system,"PingFang SC",system-ui,sans-serif}
+.wrap{max-width:1320px;margin:0 auto;padding:28px 28px 60px}
+h1{font-size:22px;margin:0 0 4px;font-weight:650;letter-spacing:.2px}
+.sub{color:#5d6964;margin:0 0 14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:22px}
+.chip{background:#fff;border:1px solid #d5dad6;border-radius:999px;padding:3px 10px;font-size:12px;color:#3d4843}
+.chip b{font-weight:600;color:#1d2320}
+.designs{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+.designs button{all:unset;cursor:pointer;background:#fff;border:1.5px solid #d5dad6;border-radius:12px;padding:12px 14px}
+.designs button.on{border-color:#1d2320;box-shadow:0 0 0 3px #1d232014}
+.designs strong{display:block;font-size:15px}
+.designs span{font-size:12.5px;color:#5d6964}
+main{display:grid;grid-template-columns:auto 1fr;gap:28px;align-items:start}
+.device{background:#191c1b;padding:20px 20px 26px;border-radius:20px;box-shadow:0 18px 40px #1d232030,inset 0 0 0 1px #2c312f;display:inline-block}
+.device canvas{display:block;image-rendering:pixelated;cursor:pointer;touch-action:none;border-radius:2px}
+.dlabel{color:#6d7672;font-size:11px;text-align:center;margin-top:10px;letter-spacing:1px}
+.controls{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:14px;font-size:13px}
+.seg{display:inline-flex;background:#fff;border:1px solid #d5dad6;border-radius:8px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;padding:5px 10px;font-size:12.5px;color:#3d4843}
+.seg button.on{background:#1d2320;color:#fff}
+label.ck{display:inline-flex;gap:5px;align-items:center;cursor:pointer}
+.hint{color:#5d6964;font-size:12.5px;margin:10px 0 0;max-width:680px}
+aside{background:#fff;border:1px solid #d5dad6;border-radius:14px;padding:18px 20px;min-width:0}
+aside h2{font-size:17px;margin:0 0 2px}
+aside .tag{color:#5d6964;margin:0 0 12px}
+aside h3{font-size:12px;letter-spacing:1px;color:#7a8580;margin:16px 0 6px;font-weight:600}
+aside ul{margin:0;padding-left:18px}
+aside li{margin:3px 0}
+.audit{font:12px ui-monospace,Menlo,monospace;background:#f4f6f4;border-radius:8px;padding:8px 12px;color:#2f3a35}
+.nav{background:#fff;border:1px solid #d5dad6;border-radius:14px;padding:14px 20px;margin-top:22px;font-size:13px}
+.nav h3{font-size:13px;margin:0 0 6px}
+.nav ul{margin:0;padding-left:18px}
+.strip{margin-top:30px}
+.strip h3{font-size:13px;color:#5d6964;font-weight:600;margin:0 0 10px}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px}
+.thumb{cursor:pointer}
+.thumb canvas{width:320px;height:240px;display:block;image-rendering:pixelated;border-radius:6px;box-shadow:0 0 0 6px #191c1b,0 8px 20px #1d232026;margin:6px}
+.thumb p{margin:10px 6px 0;font-size:12.5px;color:#3d4843}
+kbd{font:11px ui-monospace,Menlo,monospace;background:#f0f2f0;border:1px solid #d5dad6;border-radius:4px;padding:0 4px}
+</style>
+<body><div class="wrap">
+<h1>ESP32 状态屏 · UI v3 首页方案</h1>
+<p class="sub">首页改为设备桌面：时钟 + 各模块摘要 + 模块入口。Sub2API 监控成为其中一个模块，点进去就是现有的 UI v2 方案 A。按实机约束绘制：320×240 画布 1:1 绘制后最近邻放大，字体加载固件同源的 Montserrat、Noto Sans CJK 与 LVGL 内置图标。系统信息为模拟值。</p>
+<div class="chips">
+ <span class="chip"><b>320×240</b> ST7789 IPS · RGB565</span>
+ <span class="chip">FT6336 触摸 + GPIO0 按键</span>
+ <span class="chip">SNTP 已有 → 时钟可用</span>
+ <span class="chip">现有字库 Montserrat <b>12/14/16/20/28/40</b> + 中文 14/16</span>
+ <span class="chip">图标仅限 <b>LV_SYMBOL</b> 内置集合</span>
+ <span class="chip">固件 1.50 MB / 4 MB 分区</span>
+</div>
+<div class="designs" id="designs"></div>
+<main>
+ <section>
+  <div class="device"><canvas id="lcd"></canvas><div class="dlabel">ESP32-S3 · 2.0" 320×240</div></div>
+  <div class="controls">
+   <span>场景</span><span class="seg" id="scen"></span>
+   <span class="seg" id="scale"></span>
+   <label class="ck"><input type="checkbox" id="q565" checked>RGB565 量化</label>
+   <button id="reset" style="all:unset;cursor:pointer;color:#3d4843;text-decoration:underline">回到桌面</button>
+  </div>
+  <p class="hint" id="hint"></p>
+ </section>
+ <aside id="notes"></aside>
+</main>
+<div class="nav">
+ <h3>四个方案共用的模块约定</h3>
+ <ul>
+  <li>模块 = 名称 + 图标 + 桌面摘要（glance）+ 全屏页面。桌面只负责展示摘要和跳转，新功能只需注册一个模块。</li>
+  <li>返回：模块内<b>点顶部状态栏</b>或<b>在第一页右滑</b>回到桌面；和 v2 详情页“点顶部 / 右滑返回”是同一个手势，只是多了一层。</li>
+  <li>GPIO0 单击仍是熄屏 / 亮屏，不占用作导航。上电默认进桌面；是否“记住上次所在模块”可以后续再定。</li>
+  <li>目前只有 Sub2API 和系统两个模块；还没实现的模块（计时器等）不显示，也不放占位。</li>
+ </ul>
+</div>
+<section class="strip"><h3 id="stripTitle"></h3><div class="thumbs" id="thumbs"></div></section>
+</div>
+<script>
+// ───────────────────────── 时间与数据 ─────────────────────────
+const W = 320, H = 240;
+const SIM0 = Date.parse('2026-10-04T08:00:00Z'), BOOT = Date.now();
+const now = () => SIM0 + 12000 + (Date.now() - BOOT);
+const MIN = 60e3, HR = 3600e3, DAY = 86400e3;
+
+const win = (label, used, resetIn, q = 'observed', age = 30e3) =>
+  ({label, used, reset: resetIn == null ? 0 : SIM0 + resetIn, q, sampled: SIM0 - age});
+const acct = (alias, platform, type, flags, conc, windows, today, balance = '') =>
+  ({alias, platform, type, flags, conc: conc[0], limit: conc[1], windows, today, balance});
+
+function liveAccounts() {
+  return [
+    acct('Claude-20', 'anthropic', 'oauth', ['quota_warning'], [1, 10], [win('5h', 2, 6*HR + 20*MIN), win('7d', 87, 2*DAY + 13*HR)], {req: 210, tok: 31.2e6, cost: 12.10}),
+    acct('Codex-22', 'openai', 'oauth', [], [0, 10], [win('5h', 39, 3*HR + 19*MIN, 'stale', 38*MIN), win('7d', 8, 6*DAY + 5*HR, 'stale', 38*MIN)], {req: 96, tok: 9.8e6, cost: 4.02}),
+    acct('Codex-45', 'openai', 'oauth', [], [1, 10], [win('5h', 15, 2*HR + 4*MIN), win('7d', 4, 6*DAY + 5*HR)], {req: 134, tok: 12.17e6, cost: 5.24}),
+  ];
+}
+const liveSys = () => ({wifi: {ssid: 'Studio-5G', rssi: -54, ip: '192.168.1.86'}, boot: SIM0 - (3*DAY + 4*HR + 12*MIN),
+  heap: '128 KB', psram: '7.4 MB', temp: 41.5, fw: 1577392, part: 0x400000, ver: '6b388f4', idf: '6.1'});
+function snapshot(accounts, extra) {
+  const sum = k => accounts.reduce((s, a) => s + (a.today?.[k] || 0), 0);
+  return Object.assign({accounts, online: true, stale: false, sys: liveSys(),
+    today: {req: sum('req'), tok: sum('tok'), cost: sum('cost')}}, extra);
+}
+const SCENARIOS = {
+  live: {label: '实时快照', make: () => snapshot(liveAccounts(), {summary: {total: 3, normal: 3, alert: 1}})},
+  alert: {label: '告警', make: () => {
+    const a = liveAccounts();
+    a[0].windows = [win('5h', 97, 7*MIN + 40e3), win('7d', 91, 2*DAY + 13*HR)]; a[0].today = {req: 980, tok: 82e6, cost: 34.1};
+    a[1].flags = ['rate_limited']; a[1].windows = [win('5h', 100, 1*HR + 5*MIN), win('7d', 62, 6*DAY + 5*HR)]; a[1].today = {req: 512, tok: 41e6, cost: 18.6};
+    a[2].today = {req: 340, tok: 25.2e6, cost: 11.5};
+    return snapshot(a, {summary: {total: 3, normal: 2, alert: 2}});
+  }},
+  offline: {label: '离线', make: () => {
+    const s = snapshot(liveAccounts(), {summary: {total: 3, normal: 3, alert: 1}, online: false, stale: true, offlineSince: SIM0 - 7*MIN});
+    s.sys.wifi = null; return s;
+  }},
+};
+const DATA = Object.fromEntries(Object.entries(SCENARIOS).map(([k, v]) => [k, v.make()]));
+
+// ───────────────────────── 口径与格式（与 v2 相同） ─────────────────────────
+const FLAG = {error: '错误', paused: '暂停', expired: '到期', rate_limited: '限流', overloaded: '过载', temp_unschedulable: '冷却',
+  local_quota_exceeded: '本地超限', model_rate_limited: '模型限流', quota_warning: '额度提醒'};
+const RANK = {ok: 0, unk: 1, warn: 2, crit: 3};
+const flagSev = f => ['error', 'expired', 'paused'].includes(f) ? 'crit' : 'warn';
+function winSev(w, d) {
+  if (d.stale || ['stale', 'unknown', 'waiting_sample'].includes(w.q) || (w.reset && w.reset <= now())) return 'unk';
+  return w.used >= 95 ? 'crit' : w.used >= 80 ? 'warn' : 'ok';
+}
+function acctSev(a, d) {
+  let s = 'ok';
+  const up = x => { if (RANK[x] > RANK[s]) s = x; };
+  a.flags.filter(f => f !== 'quota_warning').forEach(f => up(flagSev(f)));
+  a.windows.forEach(w => up(winSev(w, d)));
+  if (d.stale) up('unk');
+  return s;
+}
+const worstWin = (a, d) => [...a.windows].sort((x, y) => RANK[winSev(y, d)] - RANK[winSev(x, d)] || y.used - x.used)[0];
+function dur(ms) {
+  if (ms <= 0) return '0m';
+  const s = Math.floor(ms / 1000), m = Math.floor(s / 60), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60), mm = m % 60;
+  if (d) return `${d}d${h}h`;
+  if (h) return `${h}h${String(mm).padStart(2, '0')}m`;
+  if (m < 10) return `${mm}:${String(s % 60).padStart(2, '0')}`;
+  return `${mm}m`;
+}
+function winSub(w, d) {
+  if (d.stale) return '过期';
+  if (w.q === 'stale') return `过期 ${dur(now() - w.sampled)}`;
+  if (w.q === 'estimated') return '估算';
+  if (w.reset && w.reset <= now()) return '待新样本';
+  if (w.reset) return dur(w.reset - now());
+  return '无重置时间';
+}
+const pct = v => Math.round(v) + '%';
+const money = v => '$' + Number(v).toFixed(2);
+const compact = v => v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'K' : String(Math.round(v));
+const pollAgo = () => Math.floor((now() - SIM0) / 1000) % 15;
+const pad = n => String(n).padStart(2, '0');
+const ICON = {wifi: '\uf1eb', left: '\uf053', right: '\uf054', warn: '\uf071', bolt: '\uf0e7', gear: '\uf013', home: '\uf015'};
+function clock() {
+  const t = new Date();
+  return {hm: `${pad(t.getHours())}:${pad(t.getMinutes())}`, s: pad(t.getSeconds()),
+    date: `${t.getMonth() + 1}月${t.getDate()}日`, wk: '周' + '日一二三四五六'[t.getDay()]};
+}
+
+// 模块注册表：桌面只认这张表。新增功能 = 新增一项；没实现的模块不进表。
+const MODULES = [
+  {id: 'mon', name: 'Sub2API', title: 'Sub2API 监控', icon: ICON.bolt},
+  {id: 'sys', name: '系统', title: '系统信息', icon: ICON.gear},
+];
+const MOD = Object.fromEntries(MODULES.map(m => [m.id, m]));
+
+function monGlance(d) {
+  let sev = 'ok', worst = null;
+  d.accounts.forEach(a => {
+    const s = acctSev(a, d); if (RANK[s] > RANK[sev]) sev = s;
+    a.windows.forEach(w => { if (!worst || w.used > worst.w.used) worst = {a, w}; });
+  });
+  return {sev: d.stale ? 'unk' : sev, worst, s: d.summary};
+}
+const wifiText = d => d.sys.wifi ? `${d.sys.wifi.rssi} dBm` : `离线 ${dur(now() - d.offlineSince)}`;
+
+// ───────────────────────── 绘图原语（只用 LVGL 能做到的东西） ─────────────────────────
+let CTX, P, AUDIT = null;
+const SC = s => P[s];
+function R(x, y, w, h, c, r = 0) { CTX.fillStyle = c; if (r) { CTX.beginPath(); CTX.roundRect(x, y, w, h, r); CTX.fill(); } else CTX.fillRect(x, y, w, h); }
+const HL = (x1, x2, y, c = P.line) => R(x1, y, x2 - x1, 1, c);
+function dot(cx, cy, r, c) { CTX.fillStyle = c; CTX.beginPath(); CTX.arc(cx, cy, r, 0, 7); CTX.fill(); }
+const font = size => `${size}px Mont, FA, NotoSC, sans-serif`;
+function T(s, x, y, o = {}) {
+  s = String(s); const size = o.size || 14;
+  CTX.font = font(size); CTX.textAlign = o.align || 'left'; CTX.textBaseline = 'alphabetic'; CTX.fillStyle = o.color || P.text;
+  if (o.maxW && CTX.measureText(s).width > o.maxW) { while (s.length > 1 && CTX.measureText(s + '...').width > o.maxW) s = s.slice(0, -1); s += '...'; }
+  CTX.fillText(s, x, y);
+  if (AUDIT) {
+    if (/[\u3000-\u9fff]/.test(s)) AUDIT.cjk.add(size);
+    if (/[\x21-\x7e]/.test(s)) AUDIT.latin.add(size);
+    if (/[\uf000-\uf8ff]/.test(s)) AUDIT.icon.add(size);
+    for (const ch of s.replace(/[\x00-\x7e\u3000-\u9fff\uf000-\uf8ff\u00b7]/g, '')) AUDIT.extra.add(ch);
+  }
+  return CTX.measureText(s).width;
+}
+const TW = (s, size = 14) => { CTX.font = font(size); return CTX.measureText(String(s)).width; };
+function seq(x, y, parts) { for (const [s, o] of parts) x += T(s, x, y, o); return x; }
+const seqW = parts => parts.reduce((w, [s, o]) => w + TW(s, o.size || 14), 0);
+function bar(x, y, w, h, v, c, track = P.line) {
+  R(x, y, w, h, track, h / 2);
+  const f = Math.round(w * Math.max(0, Math.min(1, v / 100)));
+  if (f > 0) R(x, y, Math.max(f, h), h, c, h / 2);
+}
+function clip(x, y, w, h, fn) { CTX.save(); CTX.beginPath(); CTX.rect(x, y, w, h); CTX.clip(); fn(); CTX.restore(); }
+const healthColor = g => g.sev === 'ok' ? P.ok : SC(g.sev);
+function healthParts(d, g) {
+  const parts = [[`${g.s.normal}/${g.s.total}`, {color: d.stale ? P.dim : P.text}], [' 正常', {color: P.dim}]];
+  if (g.s.alert) parts.push(['  ', {}], [`${g.s.alert}`, {color: d.stale ? P.dim : P.warn}], [' 告警', {color: P.dim}]);
+  return parts;
+}
+
+const PAL = {bg: '#0b0e0d', surf: '#141917', line: '#242c28', faint: '#4b5550', text: '#e9efec', dim: '#85918b', neutral: '#a9b6b0',
+  ok: '#5ed29c', warn: '#f3b54a', crit: '#ff6e61', unk: '#5e6964'};
+
+// ───────────────────────── 一言（B、C 共用） ─────────────────────────
+// 一言：https://developer.hitokoto.cn/sentence/ ，只支持 HTTPS，v1.hitokoto.cn 限 2 QPS。
+// 分类只取 文学/影视/诗词/哲学，避开动画、漫画、游戏里常见的日文假名。
+const HITO_URL = 'https://v1.hitokoto.cn/?c=d&c=h&c=i&c=k&max_length=40&encode=json&charset=utf-8';
+const HITO_TYPE = {a: '动画', b: '漫画', c: '游戏', d: '文学', e: '原创', f: '网络', g: '其他', h: '影视', i: '诗词', j: '网易云', k: '哲学', l: '抖机灵'};
+const HITO = {cur: {hitokoto: '人生如逆旅，我亦是行人。', from: '临江仙·送钱穆父', from_who: '苏轼', type: 'i'}, loading: false, err: null, last: -Infinity};
+async function fetchHito() {
+  if (HITO.loading || performance.now() - HITO.last < 1000) return;
+  HITO.loading = true; HITO.last = performance.now();
+  try {
+    const r = await fetch(HITO_URL);
+    if (!r.ok) throw Error('HTTP ' + r.status);
+    HITO.cur = await r.json(); HITO.err = null;
+  } catch (e) { HITO.err = String(e.message || e); }
+  HITO.loading = false;
+  if (typeof render === 'function') { render(); renderThumbs(); notes(); }
+}
+// 与 LVGL LV_LABEL_LONG_WRAP 一致：中文逐字折行，不做标点避头尾；超过 max 行时末尾改成省略号。
+function wrap(s, maxW, size, max = Infinity) {
+  let lines = [], cur = '';
+  for (const ch of s) { if (cur && TW(cur + ch, size) > maxW) { lines.push(cur); cur = ch; } else cur += ch; }
+  if (cur) lines.push(cur);
+  if (lines.length > max) { lines = lines.slice(0, max); lines[max - 1] = lines[max - 1].slice(0, -1) + '…'; }
+  return lines;
+}
+const hitoSource = h => h.from_who && h.from_who !== h.from ? `${h.from_who}「${h.from}」` : `「${h.from}」`;
+
+// ───────────────────────── 模块页面（四个方案共用） ─────────────────────────
+function open(st, id) { st.screen = id; st.page = 0; st.toast = null; }
+function toast(st, text) { st.toast = {text, t0: performance.now()}; }
+function drawToast(st) {
+  if (!st.toast || performance.now() - st.toast.t0 > 1600) return;
+  const w = TW(st.toast.text) + 28;
+  R(160 - w / 2, 196, w, 28, P.line, 14); T(st.toast.text, 160, 215, {align: 'center'});
+}
+function header(title, right, rightColor) {
+  T(ICON.left, 10, 17, {size: 14, color: P.dim}); T(title, 26, 17, {size: 16, maxW: 170});
+  if (right) T(right, 310, 17, {color: rightColor || P.dim, align: 'right'});
+  HL(0, W, 24);
+}
+
+// Sub2API 监控 = v2 方案 A 首页，状态栏最左加返回箭头。
+function monHome(st, d) {
+  const s = d.summary, g = monGlance(d);
+  T(ICON.left, 8, 17, {size: 12, color: P.dim});
+  dot(25, 12, 4, d.stale ? P.unk : s.normal < s.total ? P.crit : P.ok);
+  let x = seq(35, 17, [[`${s.normal}/${s.total}`, {}], [' 正常', {color: P.dim}]]);
+  if (s.alert) seq(x + 10, 17, [[`${s.alert}`, {color: P.warn}], [' 告警', {color: P.dim}]]);
+  const c = d.online ? {text: `在线 ${pollAgo()}s`, color: P.dim} : {text: `离线 ${dur(now() - d.offlineSince)}`, color: P.warn};
+  T(c.text, 310, 17, {color: c.color, align: 'right'});
+  HL(0, W, 24);
+  T('今日账号费用', 10, 44, {color: P.dim}); T(money(d.today.cost), 10, 73, {size: 28, color: d.stale ? P.dim : P.text});
+  T('请求', 152, 44, {color: P.dim}); T(compact(d.today.req), 152, 73, {size: 20, color: d.stale ? P.dim : P.text});
+  T('Token', 234, 44, {color: P.dim}); T(compact(d.today.tok), 234, 73, {size: 20, color: d.stale ? P.dim : P.text});
+  T(ICON.right, 312, 44, {size: 12, color: P.faint, align: 'right'});
+  HL(0, W, 81);
+  const pages = Math.ceil(d.accounts.length / 3), pg = Math.min(st.page, pages - 1);
+  const rows = d.accounts.slice(pg * 3, pg * 3 + 3);
+  rows.forEach((a, i) => monRow(a, 82 + i * 46, d, i < rows.length - 1));
+  T('Sub2API', 10, 235, {size: 12, color: P.faint});
+  T(`${pg + 1}/${pages}`, 310, 235, {size: 12, color: P.faint, align: 'right'});
+}
+function monRow(a, top, d, divider) {
+  const sv = acctSev(a, d);
+  if (sv !== 'ok') R(0, top + 6, 3, 34, SC(sv));
+  T(a.alias, 10, top + 20, {size: 16, maxW: 96});
+  const f = a.flags[0];
+  if (f) T(FLAG[f], 10, top + 43, {color: d.stale ? P.unk : SC(flagSev(f))});
+  else T(`并发 ${a.conc}/${a.limit}`, 10, top + 43, {color: P.dim});
+  a.windows.slice(0, 2).forEach((w, k) => {
+    const x = 112 + k * 104, s = winSev(w, d), c = SC(s);
+    T(w.label, x, top + 20, {color: P.dim});
+    T(pct(w.used), x + 94, top + 20, {size: 20, color: c, align: 'right'});
+    bar(x, top + 25, 94, 4, w.used, c);
+    T(winSub(w, d), x, top + 43, {color: s === 'unk' ? P.unk : P.dim});
+  });
+  if (divider) HL(10, 310, top + 45);
+}
+function sysScreen(st, d) {
+  const y = d.sys, wf = y.wifi;
+  // Same rows as render_system() in firmware/main/ui.c.
+  header('系统信息');
+  const rows = [
+    ['Wi-Fi', wf ? `${wf.ssid} · ${wf.rssi} dBm` : 'Wi-Fi 断线', wf ? 16 : 14],
+    ['IP 地址', wf ? wf.ip : '--'],
+    ['运行时长', dur(now() - y.boot)],
+    ['内部 RAM 可用', y.heap],
+    ['PSRAM 可用', y.psram],
+    ['版本', `${y.ver} · IDF ${y.idf}`],
+  ];
+  rows.forEach(([k, v, size], i) => {
+    const by = 48 + i * 28;
+    T(k, 10, by, {color: P.dim}); T(v, 310, by, {size: size || 14, align: 'right', maxW: 190});
+    HL(10, 310, by + 9);
+  });
+  // 触摸工具：画板看哪些位置能点到，校准修正偏差。画板不单独占桌面卡片。
+  T('触摸', 10, 234, {color: P.dim}); T('画板', 205, 234, {align: 'center'}); T('校准', 285, 234, {align: 'center'});
+}
+function drawModule(st, d) {
+  const m = MOD[st.screen];
+  if (m.id === 'mon') monHome(st, d); else sysScreen(st, d);
+}
+function tapModule(st, d, x, y) {
+  if (y < 26) { open(st, 'home'); return; }
+  if (st.screen !== 'mon') return;
+  const pages = Math.ceil(d.accounts.length / 3);
+  if (y < 82) toast(st, '今日详情 → 沿用 UI v2');
+  else if (y < 220) { if (d.accounts[st.page * 3 + Math.floor((y - 82) / 46)]) toast(st, '账号详情 → 沿用 UI v2'); }
+  else { if (x < 107) st.page = Math.max(0, st.page - 1); if (x > 213) st.page = Math.min(pages - 1, st.page + 1); }
+}
+function swipeModule(st, d, dir) {
+  if (dir > 0 && (st.screen !== 'mon' || st.page === 0)) { open(st, 'home'); return; }
+  if (st.screen === 'mon') st.page = Math.max(0, Math.min(Math.ceil(d.accounts.length / 3) - 1, st.page - dir));
+}
+
+// ───────────────────────── 方案 A · 时钟磁贴 ─────────────────────────
+const A = {
+  key: 'A', name: 'A · 时钟磁贴', tagline: '时钟在上，2×2 模块磁贴，每块带实时摘要',
+  init: () => ({screen: 'home', page: 0}),
+  hint: '点磁贴进入模块；模块内点顶部状态栏或右滑回到桌面。',
+  home(st, d) {
+    const k = clock(), g = monGlance(d);
+    const w = T(k.hm, 10, 60, {size: 40});
+    T(':' + k.s, 12 + w, 60, {size: 20, color: P.dim});
+    T(`${k.date} ${k.wk}`, 310, 32, {size: 16, align: 'right'});
+    const wt = T(wifiText(d), 310, 58, {color: d.sys.wifi ? P.dim : P.warn, align: 'right'});
+    T(ICON.wifi, 304 - wt, 58, {color: d.sys.wifi ? P.dim : P.warn, align: 'right'});
+    HL(0, W, 76);
+    MODULES.slice(0, 4).forEach((m, i) => {
+      const x = 8 + (i % 2) * 156, y = 84 + Math.floor(i / 2) * 78;
+      R(x, y, 148, 72, P.surf, 8);
+      T(m.icon, x + 12, y + 22, {size: 16, color: P.dim});
+      T(m.name, x + 34, y + 22);
+      if (m.id === 'mon') {
+        if (g.sev !== 'ok') R(x, y + 10, 3, 52, SC(g.sev));
+        dot(x + 134, y + 17, 4, healthColor(g));
+        T(money(d.today.cost), x + 12, y + 48, {size: 20, color: d.stale ? P.dim : P.text});
+        T('今日', x + 136, y + 48, {color: P.dim, align: 'right'});
+        const ws = winSev(g.worst.w, d);
+        seq(x + 12, y + 65, [[`${g.s.normal}/${g.s.total} 正常 · `, {color: P.dim}], [`${g.worst.w.label} ${pct(g.worst.w.used)}`, {color: ws === 'ok' ? P.dim : SC(ws)}]]);
+      } else if (m.id === 'sys') {
+        T(dur(now() - d.sys.boot), x + 12, y + 48, {size: 20});
+        T('运行', x + 136, y + 48, {color: P.dim, align: 'right'});
+        T(`内存 ${d.sys.heap} · ${Math.round(d.sys.temp)}°C`, x + 12, y + 65, {color: P.dim});
+      }
+    });
+  },
+  tap(st, d, x, y) {
+    if (y < 84) return;
+    const i = (x < 160 ? 0 : 1) + (y < 160 ? 0 : 2);
+    if (MODULES[i]) open(st, MODULES[i].id);
+  },
+  swipe() {},
+  thumbs: [
+    {label: '桌面 · 实时', st: {}},
+    {label: '桌面 · 告警（Sub2API 磁贴出现色条）', scenario: 'alert', st: {}},
+    {label: '桌面 · 离线', scenario: 'offline', st: {}},
+    {label: '点 Sub2API 磁贴 → 监控（v2 方案 A）', st: {screen: 'mon'}},
+    {label: '点系统磁贴 → 系统信息', st: {screen: 'sys'}},
+  ],
+  notes: `
+    <h3>理念</h3><ul>
+    <li>最传统的“桌面”：上半部分是时间，下半部分每个模块一块磁贴，磁贴本身就是摘要。</li>
+    <li>Sub2API 磁贴给出今日费用、健康数和最紧的那个额度窗口；异常时左侧出现色条，与 v2 的行首色条一致。</li></ul>
+    <h3>结构</h3><ul>
+    <li>时钟区 76px：HH:MM（40px）+ 秒（20px），右侧日期和 Wi-Fi。</li>
+    <li>磁贴 148×72，2×2；超过 4 个模块时加第二页，左右滑动翻页。</li></ul>`,
+  perf: ['每秒：秒数 + 运行时长两个小标签', '进模块 / 回桌面：整屏重绘一次', '只用现有字号，不需要新字库'],
+  fit: ['适合：模块数 ≤ 8，每个模块都有值得放在桌面的数字', '代价：每块只有 148×72，摘要只能写两行'],
+};
+
+// ───────────────────────── 方案 B · 卡片轮播（已选定） ─────────────────────────
+// 第一张是桌面卡（时钟 + 一言），之后每个模块一张。卡片竖排、上下滑动切换；屏幕左边缘触摸不准，
+// 所以左侧一列只放位置点，不需要在那里操作。
+const CARD = {x: 32, y: 48, w: 272, h: 168, step: 176, top: 24};
+const CARDS = [{id: 'desk'}, ...MODULES];
+const ease = t => 1 - Math.pow(1 - t, 3);
+const B = {
+  key: 'B', name: 'B · 卡片轮播', tagline: '首张卡片是时钟 + 一言，上下滑动切换模块（已选定）',
+  init: () => ({screen: 'home', page: 0, card: 0, anim: null}),
+  hint: '上下滑动或点上下露出的卡片切换；点时钟卡片换一句一言（真实请求 v1.hitokoto.cn），点模块卡片进入模块。',
+  animating: st => st.anim && performance.now() - st.anim.t0 < 260,
+  home(st, d) {
+    const k = clock(), desk = st.card === 0;
+    seq(10, 17, desk ? [[`${k.date} ${k.wk}`, {color: P.dim}]] : [[k.hm, {}], [`  ${k.date} ${k.wk}`, {color: P.dim}]]);
+    const wt = T(wifiText(d), 310, 17, {color: d.sys.wifi ? P.dim : P.warn, align: 'right'});
+    T(ICON.wifi, 304 - wt, 17, {color: d.sys.wifi ? P.dim : P.warn, align: 'right'});
+    let off = 0;
+    if (B.animating(st)) off = (st.card - st.anim.from) * CARD.step * (1 - ease((performance.now() - st.anim.t0) / 260));
+    clip(0, CARD.top, W, H - CARD.top, () => CARDS.forEach((c, i) => {
+      const y = Math.round(CARD.y + (i - st.card) * CARD.step + off);
+      if (y > H || y + CARD.h < CARD.top) return;
+      clip(CARD.x, y, CARD.w, CARD.h, () => { R(CARD.x, y, CARD.w, CARD.h, P.surf, 10); c.id === 'desk' ? bDesk(CARD.x, y, d) : bCard(c, CARD.x, y, d); });
+    }));
+    // 位置点竖排在左侧，只显示、不响应点按。
+    const n = CARDS.length; let py = 132 - (n * 11 + 3) / 2;
+    CARDS.forEach((c, i) => { if (i === st.card) { R(14, py, 5, 14, P.dim, 2.5); py += 20; } else { dot(16.5, py + 2.5, 2.5, P.faint); py += 11; } });
+  },
+  tap(st, d, x, y) {
+    if (x < CARD.x || x > CARD.x + CARD.w || y < CARD.top) return;
+    if (y < CARD.y) B.go(st, st.card - 1);
+    else if (y > CARD.y + CARD.h) B.go(st, st.card + 1);
+    else if (st.card === 0) { fetchHito(); toast(st, '换一句'); }
+    else open(st, CARDS[st.card].id);
+  },
+  swipe() {},
+  vswipe(st, d, dir) { B.go(st, st.card - dir); },
+  go(st, to) {
+    to = Math.max(0, Math.min(CARDS.length - 1, to));
+    if (to !== st.card) { st.anim = {from: st.card, t0: performance.now()}; st.card = to; }
+  },
+  thumbs: [
+    {label: '桌面 · 时钟 + 一言（上电默认）', st: {}},
+    {label: '桌面 · 离线（保留上一句）', scenario: 'offline', st: {}},
+    {label: '滑到 Sub2API 卡片', st: {card: 1}},
+    {label: 'Sub2API 卡片 · 告警', scenario: 'alert', st: {card: 1}},
+    {label: '滑到系统卡片', st: {card: 2}},
+    {label: '点 Sub2API 卡片 → 监控（v2 方案 A）', st: {screen: 'mon', card: 1}},
+    {label: '点系统卡片 → 系统信息', st: {screen: 'sys', card: 2}},
+  ],
+  notes: `
+    <h3>理念</h3><ul>
+    <li>第一张是桌面卡：时钟 + 一句一言，上电默认停在这里；之后每个模块一张卡片（目前只有 Sub2API、系统）。画板是触摸测试工具，入口在系统信息页底部。</li>
+    <li>每次只把一件事讲清楚；卡片 272×168，能放 40px 大数字和一排账号。</li>
+    <li>卡片竖排，上下各露出 16px 的相邻卡片，提示可以上下滑动。模块增加时只是多几张卡片，布局不用改。</li>
+    <li>最初是左右滑动，实物上不好用，改为上下滑动。屏幕左边缘触摸不准，左侧 32px 只放竖排的位置点，不需要在那里操作。</li></ul>
+    <h3>一言</h3><ul>
+    <li>接口 <kbd>v1.hitokoto.cn</kbd>，分类 d 文学 / h 影视 / i 诗词 / k 哲学，<kbd>max_length=40</kbd>：卡片内 248px 宽、16px 字每行 15 字，正好 3 行。</li>
+    <li>点时钟卡片换一句，另外每 10 分钟自动换（接口限 2 QPS，设备端限 1 秒一次）；失败或离线时保留上一句。</li></ul>
+    <h3>结构</h3><ul>
+    <li>顶部 24px：日期、Wi-Fi；离开时钟卡片后左侧补上 HH:MM，避免和卡片里的大时钟重复。</li>
+    <li>时钟卡片：40px 时间 + 20px 秒，右侧是一言分类；分割线下是最多 3 行一言（行距 24px）和 16px 出处。</li>
+    <li>系统卡片底部是内存、PSRAM、版本；设备没有读温度，所以不显示温度。</li>
+    <li>卡片 272×168，位于 x 32–304；左侧 x 14 是位置点。从模块返回时停在进入前的那张卡片。</li></ul>`,
+  perf: ['LVGL 用纵向滚动容器 + LV_SCROLL_SNAP_CENTER 实现', '滑动动画期间每帧重绘约 320×216 px ≈ 135 KB，SPI 约 14 ms/帧，可到 30 fps 左右',
+    '静止时每秒只更新一个小标签（时钟卡片的秒数，或其他卡片顶部的时间）', '16px 中文字库为 GB2312 全集（7448 字，约 0.92 MB Flash）；句子含字库外的字时自动换一句'],
+  fit: ['适合：模块会越来越多、每个模块的摘要信息量较大', '代价：看其他模块必须先滑过去，桌面卡上看不到账号状态'],
+};
+function bDesk(x, y, d) {
+  const k = clock(), h = HITO.cur;
+  const w = T(k.hm, x + 12, y + 50, {size: 40});
+  T(':' + k.s, x + 14 + w, y + 50, {size: 20, color: P.dim});
+  T('一言', x + 260, y + 26, {color: P.faint, align: 'right'});
+  T(HITO.loading ? '获取中' : HITO_TYPE[h.type] || '', x + 260, y + 50, {color: P.dim, align: 'right'});
+  HL(x + 12, x + 260, y + 62);
+  const lines = wrap(h.hitokoto, 248, 16, 3);
+  const top = y + 64 + Math.round((76 - lines.length * 24) / 2) + 17;
+  lines.forEach((l, i) => T(l, x + 12, top + i * 24, {size: 16, color: d.sys.wifi ? P.text : P.neutral}));
+  // 出处来自网络，用 GB2312 全集的 16px 字库；14px 只是源码用字的子集。
+  T('—— ' + hitoSource(h), x + 260, y + 158, {size: 16, color: P.dim, align: 'right', maxW: 248});
+}
+function bBottom3(items, x, y) {
+  items.forEach(([k, v, c], i) => { const cx = x + 12 + i * 84; T(k, cx, y + 128, {color: P.dim, maxW: 78}); T(v, cx, y + 152, {size: 16, color: c || P.text, maxW: 78}); });
+}
+function bCard(m, x, y, d) {
+  T(m.icon, x + 12, y + 24, {size: 16, color: P.dim});
+  T(m.title, x + 34, y + 24, {size: 16});
+  if (m.id === 'mon') {
+    const g = monGlance(d), parts = healthParts(d, g);
+    seq(x + 260 - seqW(parts), y + 24, parts);
+    T('今日账号费用', x + 12, y + 52, {color: P.dim});
+    T(money(d.today.cost), x + 12, y + 92, {size: 40, color: d.stale ? P.dim : P.text});
+    T(`${compact(d.today.req)} 请求`, x + 260, y + 70, {color: P.dim, align: 'right'});
+    T(`${compact(d.today.tok)} Token`, x + 260, y + 92, {color: P.dim, align: 'right'});
+    HL(x + 12, x + 260, y + 106);
+    d.accounts.slice(0, 3).forEach((a, i) => {
+      const cx = x + 12 + i * 84, w = worstWin(a, d), s = winSev(w, d), c = SC(s);
+      T(a.alias, cx, y + 128, {color: P.dim, maxW: 76});
+      bar(cx, y + 136, 72, 4, w.used, c);
+      T(`${w.label} ${pct(w.used)}`, cx, y + 158, {size: 16, color: c});
+    });
+  } else if (m.id === 'sys') {
+    T(`运行 ${dur(now() - d.sys.boot)}`, x + 260, y + 24, {color: P.dim, align: 'right'});
+    T('Wi-Fi', x + 12, y + 52, {color: P.dim});
+    if (d.sys.wifi) { T(d.sys.wifi.ssid, x + 12, y + 92, {size: 28}); T(`${d.sys.wifi.rssi} dBm`, x + 260, y + 92, {color: P.dim, align: 'right'}); }
+    else T(`已断开 ${dur(now() - d.offlineSince)}`, x + 12, y + 88, {size: 16, color: P.warn});
+    HL(x + 12, x + 260, y + 106);
+    bBottom3([['内存', d.sys.heap], ['PSRAM', d.sys.psram], ['版本', d.sys.ver]], x, y);
+  }
+}
+
+// ───────────────────────── 方案 C · 侧栏 + 时钟 + 一言 ─────────────────────────
+const RAIL = 52;
+const C = {
+  key: 'C', name: 'C · 侧栏 + 一言', tagline: '左侧图标栏导航，右侧时钟 + 一句一言',
+  init: () => ({screen: 'home', page: 0}),
+  hint: '点左侧图标进入对应模块；点右侧一言区域换一句（真实请求 v1.hitokoto.cn）。',
+  home(st, d) {
+    const k = clock(), g = monGlance(d), h = HITO.cur;
+    R(0, 0, RAIL, H, P.surf);
+    [{icon: ICON.home}, ...MODULES].forEach((m, i) => {
+      const cy = 24 + i * 48;
+      if (i === 0) R(6, cy - 20, 40, 40, P.line, 8);
+      T(m.icon, 26, cy + 7, {size: 20, color: i === 0 ? P.text : P.dim, align: 'center'});
+      if (m.id === 'mon' && g.sev !== 'ok') dot(38, cy - 10, 4, SC(g.sev));
+    });
+    const w = T(k.hm, 62, 50, {size: 40});
+    T(':' + k.s, 64 + w, 50, {size: 20, color: P.dim});
+    T(`${k.date} ${k.wk}`, 310, 26, {align: 'right'});
+    const wt = T(wifiText(d), 310, 50, {color: d.sys.wifi ? P.dim : P.warn, align: 'right'});
+    T(ICON.wifi, 304 - wt, 50, {color: d.sys.wifi ? P.dim : P.warn, align: 'right'});
+    HL(RAIL + 8, W, 62);
+    T('一言', 62, 84, {color: P.faint});
+    T(HITO.loading ? '获取中' : HITO_TYPE[h.type] || '', 310, 84, {color: P.faint, align: 'right'});
+    const lines = wrap(h.hitokoto, 248, 16, 4);
+    const top = 96 + Math.round((116 - lines.length * 26) / 2) + 19;
+    lines.forEach((l, i) => T(l, 62, top + i * 26, {size: 16, color: d.sys.wifi ? P.text : P.neutral}));
+    T('—— ' + hitoSource(h), 310, 230, {size: 16, color: P.dim, align: 'right', maxW: 248});
+  },
+  tap(st, d, x, y) {
+    if (x < RAIL) { const i = Math.floor(y / 48); if (i > 0 && MODULES[i - 1]) open(st, MODULES[i - 1].id); return; }
+    if (y >= 64) { fetchHito(); toast(st, '换一句'); }
+  },
+  swipe() {},
+  thumbs: [
+    {label: '桌面 · 实时', st: {}},
+    {label: '桌面 · 告警（侧栏 Sub2API 图标带角标）', scenario: 'alert', st: {}},
+    {label: '桌面 · 离线（显示缓存的上一句）', scenario: 'offline', st: {}},
+    {label: '点侧栏闪电 → Sub2API 监控', st: {screen: 'mon'}},
+    {label: '点侧栏齿轮 → 系统信息', st: {screen: 'sys'}},
+  ],
+  notes: `
+    <h3>理念</h3><ul>
+    <li>桌面不再承担监控：右上时钟保持不变，下方只放一句一言。账号状态靠侧栏 Sub2API 图标的色点角标提示，详细信息点进模块看。</li>
+    <li>左侧 52px 图标栏固定列出全部模块，导航位置始终不变。</li></ul>
+    <h3>一言</h3><ul>
+    <li>接口 <kbd>v1.hitokoto.cn</kbd>，分类 d 文学 / h 影视 / i 诗词 / k 哲学，<kbd>max_length=40</kbd>：右侧 248px 宽、16px 字每行约 15 字，最多 3 行。</li>
+    <li>建议每 10 分钟自动换一句，点按右侧手动换（接口限 2 QPS，设备端限 1 秒一次）。</li>
+    <li>失败或离线时保留上一句；首次启动没有缓存时显示内置的一句。</li></ul>
+    <h3>结构</h3><ul>
+    <li>图标栏每格 48px，最多 5 格（桌面 + 4 个模块），再多需要滚动。</li>
+    <li>图标栏只在桌面出现，进入模块后仍是全屏 320px，v2 的布局不用改。</li></ul>`,
+  perf: ['每秒：只更新秒数一个小标签', '换句时重绘右下约 250×170 px', '16px 中文字库为 GB2312 全集（7448 字，约 0.92 MB Flash）；句子含字库外的字时自动换一句'],
+  fit: ['桌面安静、好看；Sub2API 异常只以角标提示', '代价：首页看不到账号数据，要点进模块'],
+};
+
+// ───────────────────────── 方案 D · 大字时钟 ─────────────────────────
+const D = {
+  key: 'D', name: 'D · 大字时钟', tagline: '1 米外可读的大时钟 + 一行状态 + 底部 Dock',
+  init: () => ({screen: 'home', page: 0}),
+  hint: '点中间的状态条进入 Sub2API 监控；点底部 Dock 进入对应模块。',
+  home(st, d) {
+    const k = clock(), g = monGlance(d);
+    T(ICON.wifi, 10, 17, {color: d.sys.wifi ? P.dim : P.warn});
+    T(wifiText(d), 30, 17, {color: d.sys.wifi ? P.dim : P.warn});
+    T(`${Math.round(d.sys.temp)}°C`, 310, 17, {color: P.dim, align: 'right'});
+    T(k.hm, 160, 104, {size: 72, align: 'center'});
+    T(`${k.date} ${k.wk}`, 160, 132, {size: 16, color: P.dim, align: 'center'});
+    const parts = [...healthParts(d, g), [' · 今日 ', {color: P.dim}], [money(d.today.cost), {color: d.stale ? P.dim : P.text}]];
+    const pw = seqW(parts) + 14;
+    R(160 - pw / 2 - 14, 146, pw + 28, 26, P.surf, 13);
+    dot(160 - pw / 2, 159, 4, healthColor(g));
+    seq(160 - pw / 2 + 14, 164, parts);
+    HL(0, W, 184);
+    MODULES.forEach((m, i) => {
+      const cx = 160 + (i - (MODULES.length - 1) / 2) * 80;
+      T(m.icon, cx, 212, {size: 20, align: 'center'});
+      T(m.name, cx, 233, {color: P.dim, align: 'center'});
+      if (m.id === 'mon' && g.sev !== 'ok') dot(cx + 14, 196, 4, SC(g.sev));
+    });
+  },
+  tap(st, d, x, y) {
+    if (y >= 142 && y < 178) open(st, 'mon');
+    else if (y >= 184) { const m = MODULES[Math.floor((x - 160) / 80 + MODULES.length / 2)]; if (m) open(st, m.id); }
+  },
+  swipe() {},
+  thumbs: [
+    {label: '桌面 · 实时', st: {}},
+    {label: '桌面 · 告警（状态条变色 + Dock 角标）', scenario: 'alert', st: {}},
+    {label: '桌面 · 离线', scenario: 'offline', st: {}},
+    {label: '点状态条 → Sub2API 监控', st: {screen: 'mon'}},
+    {label: '点 Dock 齿轮 → 系统信息', st: {screen: 'sys'}},
+  ],
+  notes: `
+    <h3>理念</h3><ul>
+    <li>把屏幕当桌面时钟：大部分时间只看时间，有异常时看那一行状态条就够了；细节全部放进模块。</li>
+    <li>Dock 每格 80×56，居中排列，是四个方案里最大的触摸目标。</li></ul>
+    <h3>结构</h3><ul>
+    <li>顶部小状态（Wi-Fi、温度）→ 72px 时钟 → 日期 → 状态条 → Dock。</li>
+    <li>时钟只到分钟，每分钟才重绘一次大字。</li></ul>`,
+  perf: ['需要新字库：Montserrat 72 只含 0-9 和冒号（约 11 个字形，4bpp 约 10 KB Flash）', '每分钟重绘时钟区约 200×70 px，其余时间几乎不刷新', '最省电，也最安静'],
+  fit: ['适合：放在桌上当时钟，远看为主', '代价：桌面信息最少，看任何账号都要点进去；Dock 超过 4 格就放不下'],
+};
+
+// ───────────────────────── 宿主：渲染、交互、缩略图 ─────────────────────────
+const DESIGNS = {A, B, C, D};
+const ui = {design: 'B', scenario: 'live', scale: 2, q565: true};
+const states = Object.fromEntries(Object.entries(DESIGNS).map(([k, v]) => [k, v.init()]));
+const lcd = document.getElementById('lcd'), lctx = lcd.getContext('2d');
+const off = document.createElement('canvas'); off.width = W; off.height = H;
+const octx = off.getContext('2d', {willReadFrequently: true});
+
+function quantize(ctx) {
+  const img = ctx.getImageData(0, 0, W, H), p = img.data;
+  for (let i = 0; i < p.length; i += 4) {
+    const r = p[i] >> 3, g = p[i + 1] >> 2, b = p[i + 2] >> 3;
+    p[i] = (r << 3) | (r >> 2); p[i + 1] = (g << 2) | (g >> 4); p[i + 2] = (b << 3) | (b >> 2);
+  }
+  ctx.putImageData(img, 0, 0);
+}
+function renderTo(ctx, design, st, scenario, audit) {
+  CTX = ctx; P = PAL; AUDIT = audit || null;
+  const d = DATA[scenario];
+  ctx.save(); ctx.clearRect(0, 0, W, H); R(0, 0, W, H, P.bg);
+  if (st.screen === 'home') design.home(st, d); else drawModule(st, d);
+  drawToast(st);
+  ctx.restore();
+  if (ui.q565) quantize(ctx);
+  AUDIT = null;
+}
+const newAudit = () => ({cjk: new Set(), latin: new Set(), icon: new Set(), extra: new Set()});
+let audit = newAudit(), rafPending = false;
+function render() {
+  const design = DESIGNS[ui.design], st = states[ui.design];
+  renderTo(octx, design, st, ui.scenario, audit);
+  lctx.imageSmoothingEnabled = false;
+  lctx.drawImage(off, 0, 0, lcd.width, lcd.height);
+  if (st.screen === 'home' && design.animating?.(st) && !rafPending) {
+    rafPending = true; requestAnimationFrame(() => { rafPending = false; render(); });
+  }
+}
+function setupCanvas() {
+  lcd.width = W * 4; lcd.height = H * 4;
+  lcd.style.width = W * ui.scale + 'px'; lcd.style.height = H * ui.scale + 'px';
+}
+
+let thumbCanvases = [];
+function buildThumbs() {
+  const design = DESIGNS[ui.design], box = document.getElementById('thumbs');
+  box.innerHTML = ''; thumbCanvases = [];
+  design.thumbs.forEach(t => {
+    const el = document.createElement('div'); el.className = 'thumb';
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const p = document.createElement('p'); p.textContent = t.label;
+    el.append(c, p); box.append(el);
+    el.onclick = () => {
+      ui.scenario = t.scenario || 'live';
+      states[ui.design] = Object.assign(design.init(), structuredClone(t.st));
+      syncControls(); render(); window.scrollTo({top: 0, behavior: 'smooth'});
+    };
+    thumbCanvases.push([c, t]);
+  });
+  document.getElementById('stripTitle').textContent = `${design.name} · 全部页面（约实物尺寸，点击载入上方交互屏）`;
+}
+function renderThumbs() {
+  const design = DESIGNS[ui.design];
+  thumbCanvases.forEach(([c, t]) => {
+    const st = Object.assign(design.init(), structuredClone(t.st));
+    renderTo(c.getContext('2d', {willReadFrequently: true}), design, st, t.scenario || 'live', audit);
+  });
+}
+function notes() {
+  const d = DESIGNS[ui.design], fmt = s => [...s].sort((a, b) => a - b).join(' / ') || '—';
+  const have = [12, 14, 16, 20, 28, 40], missing = [...audit.latin].filter(s => !have.includes(s));
+  document.getElementById('notes').innerHTML = `
+    <h2>${d.name}</h2><p class="tag">${d.tagline}</p>${d.notes}
+    <h3>性能预算</h3><ul>${d.perf.map(x => `<li>${x}</li>`).join('')}</ul>
+    <h3>取舍</h3><ul>${d.fit.map(x => `<li>${x}</li>`).join('')}</ul>
+    <h3>字库需求（根据本方案实际绘制结果统计，含模块页）</h3>
+    <div class="audit">中文子集：${fmt(audit.cjk)} px<br>Montserrat：${fmt(audit.latin)} px${missing.length ? `（缺 ${missing.join(' / ')}）` : ''}<br>LVGL 图标：${fmt(audit.icon)} px<br>需额外加入子集的字符：${[...audit.extra].join(' ') || '—'}</div>
+    <p class="tag" style="margin-top:8px;font-size:12px">现有字库为 Montserrat 12/14/16/20/28/40 + 中文 14/16。° 不在 LVGL 内置 Montserrat 的字符范围内，需要用 <kbd>scripts/generate_font.py</kbd>（lv_font_conv）补进子集，或改写成“41 度”。</p>`;
+}
+
+function syncControls() {
+  document.querySelectorAll('#designs button').forEach(b => b.classList.toggle('on', b.dataset.k === ui.design));
+  document.querySelectorAll('#scen button').forEach(b => b.classList.toggle('on', b.dataset.k === ui.scenario));
+  document.querySelectorAll('#scale button').forEach(b => b.classList.toggle('on', +b.dataset.k === ui.scale));
+  document.getElementById('hint').textContent = DESIGNS[ui.design].hint;
+}
+function selectDesign(k) {
+  ui.design = k; audit = newAudit();
+  syncControls(); buildThumbs(); renderThumbs(); render(); notes();
+}
+
+document.getElementById('designs').innerHTML = Object.values(DESIGNS).map(d => `<button data-k="${d.key}"><strong>${d.name}</strong><span>${d.tagline}</span></button>`).join('');
+document.querySelectorAll('#designs button').forEach(b => b.onclick = () => selectDesign(b.dataset.k));
+document.getElementById('scen').innerHTML = Object.entries(SCENARIOS).map(([k, v]) => `<button data-k="${k}">${v.label}</button>`).join('');
+document.querySelectorAll('#scen button').forEach(b => b.onclick = () => { ui.scenario = b.dataset.k; states[ui.design].page = 0; syncControls(); render(); });
+document.getElementById('scale').innerHTML = [2, 3].map(s => `<button data-k="${s}">${s}×</button>`).join('');
+document.querySelectorAll('#scale button').forEach(b => b.onclick = () => { ui.scale = +b.dataset.k; setupCanvas(); syncControls(); render(); });
+document.getElementById('q565').onchange = e => { ui.q565 = e.target.checked; render(); renderThumbs(); };
+document.getElementById('reset').onclick = () => { states[ui.design] = DESIGNS[ui.design].init(); render(); };
+
+let down = null;
+const toLcd = e => { const r = lcd.getBoundingClientRect(); return [(e.clientX - r.left) * W / r.width, (e.clientY - r.top) * H / r.height]; };
+lcd.addEventListener('pointerdown', e => { down = toLcd(e); lcd.setPointerCapture(e.pointerId); });
+lcd.addEventListener('pointerup', e => {
+  if (!down) return;
+  const [x, y] = toLcd(e), dx = x - down[0], dy = y - down[1], design = DESIGNS[ui.design], st = states[ui.design], d = DATA[ui.scenario];
+  const home = st.screen === 'home';
+  if (Math.abs(dx) > 25 && Math.abs(dx) > Math.abs(dy)) (home ? design.swipe : swipeModule)(st, d, Math.sign(dx));
+  else if (home && design.vswipe && Math.abs(dy) > 25) design.vswipe(st, d, Math.sign(dy));
+  else (home ? design.tap : tapModule)(st, d, down[0], down[1]);
+  down = null; render();
+});
+
+const FONTS = [
+  ['Mont', '/firmware/managed_components/lvgl__lvgl/scripts/built_in_font/Montserrat-Medium.ttf'],
+  ['FA', '/firmware/managed_components/lvgl__lvgl/scripts/built_in_font/FontAwesome5-Solid+Brands+Regular.woff'],
+  ['NotoSC', '/.tools/NotoSansCJKsc-Regular.otf'],
+];
+Promise.allSettled(FONTS.map(([name, url]) => new FontFace(name, `url(${url})`).load().then(f => document.fonts.add(f)))).then(results => {
+  const failed = results.map((r, i) => r.status === 'rejected' ? FONTS[i][0] : null).filter(Boolean);
+  if (failed.length) document.querySelector('.sub').textContent += `（字体加载失败：${failed.join(', ')}，已回退系统字体；请在仓库根目录用 http 服务打开本页）`;
+  const q = new URLSearchParams(location.search);
+  setupCanvas(); selectDesign(DESIGNS[q.get('d')] ? q.get('d') : 'B');
+  fetchHito(); setInterval(fetchHito, 10 * MIN);
+  if (SCENARIOS[q.get('s')]) { ui.scenario = q.get('s'); syncControls(); render(); }
+  setInterval(render, 250);
+  setInterval(() => { renderThumbs(); notes(); }, 1000);
+});
+</script>
+</body>
+</html>

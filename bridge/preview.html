@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>账号状态 · ESP32 屏幕预览</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef0ee;color:#26342f;font:15px system-ui,sans-serif;display:grid;place-content:center;min-height:100vh;gap:22px;padding:24px}h1{font-size:22px;font-weight:600;margin:0}p{margin:6px 0;color:#687870}.controls{display:flex;gap:8px;flex-wrap:wrap}input,button{font:inherit;border:1px solid #ccd3cf;border-radius:5px;padding:9px 12px;background:#fff}button{cursor:pointer}canvas{display:block;width:min(640px,90vw);height:auto;background:#101915;border:10px solid #28332e;border-radius:12px;box-shadow:0 12px 32px #20342c24;touch-action:manipulation}#hint{font-size:13px;min-height:20px;max-width:640px}.footer{display:flex;justify-content:space-between;align-items:center}
+</style>
+<header><h1>账号状态</h1><p>320 × 240 屏幕预览 · 点击底部切换视图，点击账号查看额度</p></header>
+<div class="controls"><input id="token" type="password" placeholder="设备展示 Token" autocomplete="off"><button id="connect">连接</button><button id="demo">使用演示 Token</button></div>
+<canvas id="screen" width="640" height="480" aria-label="ESP32 账号状态屏幕"></canvas>
+<div class="footer"><button id="prev">上一页</button><span id="page">1 / 1</span><button id="next">下一页</button></div>
+<p id="hint">填入 bridge/secrets/device-token 中的设备 Token。演示模式用 demo-device。</p>
+<script>
+const canvas=document.querySelector('#screen'),ctx=canvas.getContext('2d');ctx.scale(2,2);
+let token='',data=null,view=0,page=1,etag='',detail=null,windowPage=1,message='等待连接',poll=null;
+const colors={bg:'#101915',text:'#edf4ef',dim:'#899e92',green:'#88d3aa',amber:'#efbf73',red:'#ef8d83',line:'#2d4034'};
+function text(s,x,y,size=14,color=colors.text){ctx.fillStyle=color;ctx.font=`${size}px system-ui`;ctx.textBaseline='top';ctx.fillText(String(s),x,y)}
+function compact(n){if(n==null)return '—';const x=Number(n);return x>=1e6?(x/1e6).toFixed(1)+'M':x>=1e3?(x/1e3).toFixed(1)+'K':String(n)}
+function money(n){return n==null?'—':'$'+Number(n).toFixed(2)}
+function quality(w){return ({stale:'过期',waiting_sample:'待新样本',estimated:'估算',unknown:'未知'})[w?.quality]||''}
+function countdown(w){if(!w?.reset_at)return '';const n=Math.floor((Date.parse(w.reset_at)-Date.now())/1000);return n<=0?'待新样本':Math.floor(n/3600)+'h '+Math.floor(n%3600/60)+'m 重置'}
+const flagLabel={error:'错误',paused:'暂停',expired:'到期',rate_limited:'限流',overloaded:'过载',temp_unschedulable:'冷却',local_quota_exceeded:'本地超限',model_rate_limited:'模型限流',quota_warning:'额度提醒',unknown:'未知',stale:'过期'};
+function render(){ctx.fillStyle=colors.bg;ctx.fillRect(0,0,320,240);text(detail?detail.alias:'Sub2API',12,7,13);text(message,195,7,11,colors.dim);ctx.fillStyle=colors.line;ctx.fillRect(12,27,296,1);
+ if(!data){text('暂无数据',16,72,24);text('联网后显示账号健康、额度与今日用量',16,114,12,colors.dim)}
+ else if(detail){text('额度窗口',12,36,13,colors.dim);detail.windows.forEach((w,i)=>{const y=58+i*34;text(w.label,12,y,12);text(Number(w.used_percent).toFixed(1)+'% 已用',145,y,14,colors.green);text(quality(w)||countdown(w),145,y+16,10,colors.dim)});text('点击上方返回 · 点击右下查看更多',12,184,10,colors.dim)}
+ else if(view===0){text('状态正常',12,38,12,colors.dim);text(data.summary.observed_normal+'/'+data.summary.accounts_total,12,56,30,colors.green);text('告警账号',182,38,12,colors.dim);text(data.summary.alert_accounts,182,56,30,colors.amber);text('本站今日请求',12,101,11,colors.dim);text(compact(data.today.requests),12,117,24);text('账号费用',182,101,11,colors.dim);text(money(data.today.account_cost_usd),182,117,24);const a=data.accounts[0];if(a){text(a.alias,12,158,13);text(a.flags.map(f=>flagLabel[f]||f).join(' · ')||'状态正常',12,178,11,colors.dim)}}
+ else if(view===1){data.accounts.slice(0,3).forEach((a,i)=>{const y=35+i*54,w=a.windows[0];text(a.alias,12,y,14);text(w?Number(w.used_percent).toFixed(1)+'%':'未采样',224,y,16,w?colors.green:colors.dim);text(w?`${w.label} · ${quality(w)||countdown(w)}`:a.balances?.length?a.balances.map(b=>`${b.currency} ${b.balance}`).join(' / '):a.platform,12,y+20,11,colors.dim);ctx.fillStyle=colors.line;ctx.fillRect(12,y+41,296,3);if(w){ctx.fillStyle=w.used_percent>=95?colors.red:w.used_percent>=80?colors.amber:colors.green;ctx.fillRect(12,y+41,296*Math.min(100,w.used_percent)/100,3)}})}
+ else {text(data.day.date+' · '+data.day.timezone,12,36,11,colors.dim);[['请求',compact(data.today.requests)],['Token（含缓存）',compact(data.today.tokens)],['账号费用',money(data.today.account_cost_usd)],['用户计费',money(data.today.user_cost_usd)],['标准费用',money(data.today.standard_cost_usd)]].forEach(([l,v],i)=>{text(l,12,52+i*16,11,colors.dim);text(v,190,50+i*16,13)});const m=data.models;text('模型分布 · 请求 · Token · 账号费用',12,132,11,colors.dim);if(!m?.complete||!m.items.length)text(m?.complete?'今日暂无模型用量':'模型数据不完整',12,148,11,colors.dim);else m.items.forEach((x,i)=>{const y=146+i*13;text(x.model??`其余 ${x.other_models} 个`,12,y,11,x.model?colors.text:colors.dim);text(compact(x.requests),150,y,11);text(compact(x.tokens),198,y,11);text(money(x.account_cost_usd),250,y,11)})}
+ ctx.fillStyle=colors.line;ctx.fillRect(0,200,320,1);['总览','额度','今日'].forEach((s,i)=>{if(view===i&&!detail){ctx.fillStyle='#203b2b';ctx.fillRect(i*107,201,107,39)}text(s,35+i*107,213,14,view===i?colors.green:colors.dim)});
+ document.querySelector('#page').textContent=page+' / '+Math.max(1,Math.ceil((data?.pagination.total||1)/3));}
+async function fetchData(){if(!token)return;try{const r=await fetch(`/display/v1/snapshot?page=${page}&page_size=3`,{headers:{Authorization:'Bearer '+token,...(etag?{'If-None-Match':etag}:{})}});if(r.status===304){message=data?.partial?'部分数据过期':'在线';render();return}if(!r.ok)throw new Error('HTTP '+r.status);const body=await r.json();if(body.code!==0)throw new Error(body.message);data=body.data;etag=r.headers.get('ETag')||'';message=data.partial?'部分数据过期':'在线';document.querySelector('#hint').textContent=data.scope.label+' · '+data.scope.account_count+' 个账号 · 额度来源时间与读取时间分别保留';render()}catch(e){message='离线 / 读取失败';document.querySelector('#hint').textContent=e.message+'，保留上次数据';render()}}
+async function showDetail(id){const r=await fetch(`/display/v1/accounts/${id}?window_page=${windowPage}`,{headers:{Authorization:'Bearer '+token}});if(r.ok){detail=(await r.json()).data.accounts[0];render()}}
+document.querySelector('#connect').onclick=()=>{token=document.querySelector('#token').value.trim();etag='';fetchData();clearInterval(poll);poll=setInterval(fetchData,15000)};
+document.querySelector('#demo').onclick=()=>{document.querySelector('#token').value='demo-device';document.querySelector('#connect').click()};
+document.querySelector('#prev').onclick=()=>{if(page>1){page--;etag='';detail=null;fetchData()}};
+document.querySelector('#next').onclick=()=>{if(data?.pagination.has_more){page++;etag='';detail=null;fetchData()}};
+canvas.onclick=e=>{const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)*320/r.width,y=(e.clientY-r.top)*240/r.height;if(y>=200){view=Math.min(2,Math.floor(x/107));detail=null;render()}else if(detail){if(y<36){detail=null;render()}else if(y>=177&&detail.windows_truncated){windowPage=windowPage*4<detail.windows_total?windowPage+1:1;showDetail(detail.id)}}else if(view===1){const a=data?.accounts[Math.floor((y-35)/54)];if(a){windowPage=1;showDetail(a.id)}}};
+setInterval(render,1000);render();
+</script>
+</html>

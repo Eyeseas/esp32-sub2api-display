@@ -1,0 +1,5 @@
+**
+!bridge/
+!bridge/*.py
+!bridge/*.html
+!bridge/config.example.json

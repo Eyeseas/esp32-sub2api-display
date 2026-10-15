@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.tools/
+.cache/
+.venv/
+bridge/config.local.json
+bridge/secrets/
+firmware/sdkconfig
+firmware/sdkconfig.old
+firmware/sdkconfig.local
+firmware/build/
+firmware/managed_components/
+firmware/device.local.json
+artifacts/
+.DS_Store
